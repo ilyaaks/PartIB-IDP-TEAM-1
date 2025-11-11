@@ -2,7 +2,7 @@ from machine import Pin, PWM
 from utime import sleep
 
 def test_pwm():
-    pwm_pin_no = 28  # Pin 28 = GP28 (labelled 34 on the jumper)
+    pwm_pin_no = 15  # Pin 28 = GP28 (labelled 34 on the jumper)
     pwm_pin = PWM(Pin(pwm_pin_no), 100)
 
     level = 0  # 0-100

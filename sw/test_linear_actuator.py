@@ -11,7 +11,8 @@ class Actuator:
     def set(self, dir, speed):
         self.mDir.value(dir)                     # forward = 0 reverse = 1 motor
         self.pwm.duty_u16(int(65535 * speed / 100))  # speed range 0-100 motor
-
+    def off(self):
+        self.pwm.duty_u16(0)
 
 def test_actuator1():
     actuator1 = Actuator(dirPin=0, PWMPin=1)  # Actuator 1 controlled from Motor Driv1 #1, which is on GP0/1
