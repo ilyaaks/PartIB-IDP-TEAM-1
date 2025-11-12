@@ -1,5 +1,5 @@
 from machine import Pin, I2C
-from libs.VL53L0X import VL53L0X
+from sw.libs.VL53L0X.VL53L0X import VL53L0X
 from utime import sleep
 import libs
 def test_vl53l0x():
