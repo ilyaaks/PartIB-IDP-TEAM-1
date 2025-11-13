@@ -2,20 +2,24 @@ from machine import Pin
 from utime import sleep
 from sw.test_motor import Motor
 
-LEFT_WHEEL_SPEED = 50
-RIGHT_WHEEL_SPEED = 50
-RIGHT_PIN_NUMBER = 21
-LEFT_PIN_NUMBER = 11
-
 BASE_SPEED = 40
 SPEED_ADJUSTMENT = 10
 MIN_SPEED = 20
 MAX_SPEED = 60
 
+left_wheel_speed = BASE_SPEED
+right_wheel_speed = BASE_SPEED
+MID_RIGHT_PIN_NUMBER = 21
+MID_LEFT_PIN_NUMBER = 20
+FAR_RIGHT_PIN_NUMBER = 22
+FAR_LEFT_PIN_NUMBER = 19
+
 correction_needed = False  # Flag for interrupt handler
 
-signal_right = Pin(RIGHT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
-signal_left = Pin(LEFT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
+signal_mid_right = Pin(MID_RIGHT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
+signal_mid_left = Pin(MID_LEFT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
+signal_far_right = Pin(FAR_RIGHT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
+signal_far_left = Pin(FAR_LEFT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
 
 def motor_turn_left(speed=30):
     motor_left.Reverse(speed)
@@ -43,65 +47,96 @@ def motor_go_straight(speed_left, speed_right, direction="forward"):
     else:
         raise ValueError("Invalid direction: must be 'forward' or 'reverse'")
     
-
+sensor_left_prev = 0
+sensor_right_prev = 0
 
 def line_follower(p):
     """Interrupt handler for line sensors"""
-    global LEFT_WHEEL_SPEED, RIGHT_WHEEL_SPEED, correction_needed
+    global left_wheel_speed, right_wheel_speed, correction_needed, sensor_left_prev, sensor_right_prev
     
     # Read current sensor values
-    sensor_left = signal_left.value()
-    sensor_right = signal_right.value()
+    sensor_mid_left = signal_mid_left.value()
+    sensor_mid_right = signal_mid_right.value()
+    sensor_far_left = signal_far_left.value()
+    sensor_far_right = signal_far_right.value()
     
-    print("left: ", sensor_left, " right: ", sensor_right)
-    
-    # Adjust speeds based on sensor readings
-    if sensor_right == 1 and sensor_left == 0:
-        # Right sensor on line - car drifting right, turn left
-        LEFT_WHEEL_SPEED = max(BASE_SPEED - SPEED_ADJUSTMENT, MIN_SPEED)
-        RIGHT_WHEEL_SPEED = min(BASE_SPEED + SPEED_ADJUSTMENT, MAX_SPEED)
+    print("left: ", sensor_mid_left, " right: ", sensor_mid_right, " far left: ", sensor_far_left, " far right: ", sensor_far_right, " left speed: ", left_wheel_speed, " right speed: ", right_wheel_speed)
+    if (sensor_far_left == 0 and sensor_far_right == 0):
         correction_needed = True
-        
-    elif sensor_left == 1 and sensor_right == 0:
-        # Left sensor on line - car drifting left, turn right
-        LEFT_WHEEL_SPEED = min(BASE_SPEED + SPEED_ADJUSTMENT, MAX_SPEED)
-        RIGHT_WHEEL_SPEED = max(BASE_SPEED - SPEED_ADJUSTMENT, MIN_SPEED)
-        correction_needed = True
-        
-    elif sensor_left == 1 and sensor_right == 1:
-        # Both on line - go straight
-        LEFT_WHEEL_SPEED = BASE_SPEED
-        RIGHT_WHEEL_SPEED = BASE_SPEED
-        correction_needed = True
-        
     else:
-        # Both off line - maintain current speeds
-        pass
+        correction_needed = False
+    if (correction_needed):
+        # Both far sensors off line, stop or reverse
+        # Adjust speeds based on sensor readings
+        if sensor_mid_right == 1 and sensor_mid_left == 0:
+            # Right sensor on line - car drifting right, turn left
+            left_wheel_speed = max(BASE_SPEED - SPEED_ADJUSTMENT, MIN_SPEED)
+            right_wheel_speed = min(BASE_SPEED + SPEED_ADJUSTMENT, MAX_SPEED)
+            correction_needed = True
+            
+        elif sensor_mid_left == 1 and sensor_mid_right == 0:
+            # Left sensor on line - car drifting left, turn right
+            left_wheel_speed = min(BASE_SPEED + SPEED_ADJUSTMENT, MAX_SPEED)
+            right_wheel_speed = max(BASE_SPEED - SPEED_ADJUSTMENT, MIN_SPEED)
+            correction_needed = True
+            
+        elif sensor_mid_left == 1 and sensor_mid_right == 1:
+            # Both on line - go straight
+            left_wheel_speed = BASE_SPEED
+            right_wheel_speed = BASE_SPEED
+            correction_needed = True
+            
+        else:
+            # Both sensors off line - use previous state to determine recovery direction
+            if (sensor_left_prev == 1 and sensor_right_prev == 0):
+                # Last seen left on line - turn left to find line
+                left_wheel_speed = MAX_SPEED
+                right_wheel_speed = MIN_SPEED
+                correction_needed = True
+            elif (sensor_right_prev == 1 and sensor_left_prev == 0):
+                # Last seen right on line - turn right to find line
+                left_wheel_speed = MIN_SPEED
+                right_wheel_speed = MAX_SPEED
+                correction_needed = True
+            # If both were off previously, no correction needed - continue current trajectory
 
-    
+    else:
+        if turn_left():
+            pass
+        else:
+            # go straight
+            correction_needed = True
+            pass
+        
+    sensor_left_prev = sensor_mid_left
+    sensor_right_prev = sensor_mid_right
+
+def turn_left():
+    # TODO: Implement logic using distance sensors to determine if a left turn is needed
+    return False
 
 def init():
     # Set up interrupt handlers for line detection
-    signal_right.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
-    signal_left.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+    signal_mid_right.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+    signal_mid_left.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
     global motor_left, motor_right
     motor_left = Motor(dirPin=4, PWMPin=5)   # Motor left is controlled from Motor Driv2 #2, which is on GP2/3
     motor_right = Motor(dirPin=7, PWMPin=6)  # Motor right is controlled from Motor Driv2 #3, which is on GP6/7
     
     
 def main():
-    global LEFT_WHEEL_SPEED, RIGHT_WHEEL_SPEED, correction_needed
+    global left_wheel_speed, right_wheel_speed, correction_needed
     
     print("Starting line follower")
     
     # Start moving forward
-    motor_go_straight(LEFT_WHEEL_SPEED, RIGHT_WHEEL_SPEED, direction="forward")
+    motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
     
     while True:
         # Check if interrupt handler set correction flag
         if correction_needed:
             # Apply the new speeds calculated by interrupt handler
-            motor_go_straight(LEFT_WHEEL_SPEED, RIGHT_WHEEL_SPEED, direction="forward")
+            motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
             correction_needed = False
         
         # Small delay to allow system to respond
