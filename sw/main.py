@@ -20,21 +20,32 @@ signal_mid_right = Pin(MID_RIGHT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
 signal_mid_left = Pin(MID_LEFT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
 signal_far_right = Pin(FAR_RIGHT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
 signal_far_left = Pin(FAR_LEFT_PIN_NUMBER, Pin.IN, Pin.PULL_DOWN)
+sensor_left_prev = 0
+sensor_right_prev = 0
+count_lines = 0
+case1 = 0
+case2 = 0
+case3 = 0
+case4 = 0
+case5 = 0
+case6 = 0 
 
 def motor_turn_left(speed=30):
+    far_left_sensor = signal_far_left.value()
     motor_left.Reverse(speed)
     motor_right.Forward(speed)
-    sleep(2.1) # for speed 30, make a 90 degree turn
-    motor_left.off()
-    motor_right.off()
+    while far_left_sensor == 0:
+        far_left_sensor = signal_far_left.value()
+    motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
 
 
 def motor_turn_right(speed=30):
+    far_right_sensor = signal_far_right.value()
     motor_left.Forward(speed)
     motor_right.Reverse(speed) 
-    sleep(2.1) # for speed 30, make a 90 degree turn
-    motor_left.off()
-    motor_right.off()
+    while far_right_sensor == 0:
+        far_right_sensor = signal_far_right.value()
+    motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
 
 
 def motor_go_straight(speed_left, speed_right, direction="forward"):
@@ -47,24 +58,19 @@ def motor_go_straight(speed_left, speed_right, direction="forward"):
     else:
         raise ValueError("Invalid direction: must be 'forward' or 'reverse'")
     
-sensor_left_prev = 0
-sensor_right_prev = 0
 
 def line_follower(p):
     """Interrupt handler for line sensors"""
-    global left_wheel_speed, right_wheel_speed, correction_needed, sensor_left_prev, sensor_right_prev
-    
+    global left_wheel_speed, right_wheel_speed, correction_needed, sensor_left_prev, sensor_right_prev, count_lines
     # Read current sensor values
     sensor_mid_left = signal_mid_left.value()
     sensor_mid_right = signal_mid_right.value()
     sensor_far_left = signal_far_left.value()
     sensor_far_right = signal_far_right.value()
-    
     print("left: ", sensor_mid_left, " right: ", sensor_mid_right, " far left: ", sensor_far_left, " far right: ", sensor_far_right, " left speed: ", left_wheel_speed, " right speed: ", right_wheel_speed)
-    if (sensor_far_left == 0 and sensor_far_right == 0):
-        correction_needed = True
-    else:
-        correction_needed = False
+    if (sensor_far_left == 1 or sensor_far_right == 1 ):  
+        count_lines += 1
+        print("Lines detected: ", count_lines)
     if (correction_needed):
         # Both far sensors off line, stop or reverse
         # Adjust speeds based on sensor readings
@@ -119,13 +125,15 @@ def init():
     # Set up interrupt handlers for line detection
     signal_mid_right.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
     signal_mid_left.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+    signal_far_left.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+    signal_far_right.irq(handler=line_follower, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
     global motor_left, motor_right
     motor_left = Motor(dirPin=4, PWMPin=5)   # Motor left is controlled from Motor Driv2 #2, which is on GP2/3
     motor_right = Motor(dirPin=7, PWMPin=6)  # Motor right is controlled from Motor Driv2 #3, which is on GP6/7
     
     
 def main():
-    global left_wheel_speed, right_wheel_speed, correction_needed
+    global left_wheel_speed, right_wheel_speed, correction_needed, count_lines
     
     print("Starting line follower")
     
@@ -138,7 +146,30 @@ def main():
             # Apply the new speeds calculated by interrupt handler
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
             correction_needed = False
-        
+            if (count_lines == 2 and case1 == 0):
+                motor_turn_right(speed=30)
+                case1 = 1
+                count_lines = 0 
+            elif (count_lines == 2 and case2 == 0 and case1 ==1):
+                motor_turn_left(speed=30)
+                case2 = 1
+                count_lines = 0
+            elif (count_lines == 7 and case3 == 0 and case2 ==1):
+                motor_turn_left(speed=30)
+                case3 = 1
+                count_lines = 0
+            elif (count_lines == 2 and case4 == 0 and case3 ==1):
+                motor_turn_left(speed=30)
+                case4 = 1
+                count_lines = 0
+            elif (count_lines == 7 and case5 == 0 and case4 ==1):
+                motor_turn_left(speed=30)
+                case5 = 1
+                count_lines = 0
+            elif (count_lines == 3 and case6 == 0 and case5 ==1):
+                motor_turn_right(speed=30)
+                case6 = 1
+                count_lines = 0
         # Small delay to allow system to respond
         sleep(0.01)
 
