@@ -1,6 +1,6 @@
 from machine import Pin
 
-def test_pin(pin_number=8):
+def test_pin(pin_number):
     """
     Test a GPIO pin by toggling its state on and off.
     Args:
@@ -25,4 +25,4 @@ def test_pin(pin_number=8):
         print(f"\nPIN {pin_number} set to OFF")
 
 if __name__ == "__main__": 
-    test_pin(pin_number=8)
+    test_pin(4)
