@@ -1,6 +1,7 @@
-from machine import Pin
+from machine import Pin, I2C
 from utime import sleep
 from sw.test_motor import Motor
+from sw.libs.VL53L0X.VL53L0X import VL53L0X
 
 
 class LineFollowerRobot:
@@ -20,6 +21,9 @@ class LineFollowerRobot:
     MID_LEFT_PIN = 20
     FAR_RIGHT_PIN = 22
     FAR_LEFT_PIN = 19
+
+    SDA_PIN = 8
+    SCL_PIN = 9
     
     def __init__(self):
         """Initialize robot hardware and state"""
@@ -29,6 +33,9 @@ class LineFollowerRobot:
         
         # Initialize state variables
         self._init_state()
+        
+        # Start distance sensor
+        self.vl53l0.start()
     
     def _init_sensors(self):
         """Initialize all sensor pins"""
@@ -36,12 +43,21 @@ class LineFollowerRobot:
         self.signal_mid_left = Pin(self.MID_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
         self.signal_far_right = Pin(self.FAR_RIGHT_PIN, Pin.IN, Pin.PULL_DOWN)
         self.signal_far_left = Pin(self.FAR_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
+        
+        # config I2C Bus
+        i2c_bus = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
+        
+        # Setup vl53l0 object
+        self.vl53l0 = VL53L0X(i2c_bus)
+        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
+        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
+
     
     def _init_motors(self):
         """Initialize motor controllers"""
         self.motor_left = Motor(dirPin=4, PWMPin=5)   # Motor left is controlled from Motor Driv2 #2
         self.motor_right = Motor(dirPin=7, PWMPin=6)  # Motor right is controlled from Motor Driv2 #3
-    
+
     def _init_state(self):
         """Initialize all state variables"""
         # Motor speeds
@@ -73,6 +89,7 @@ class LineFollowerRobot:
         """Configure motor speeds for right turn"""
         self.left_wheel_speed = self.MIN_SPEED
         self.right_wheel_speed = self.MAX_SPEED
+        
     
     def motor_turn_left(self):
         """Configure motor speeds for left turn"""
@@ -100,6 +117,15 @@ class LineFollowerRobot:
         self.motor_left.off()
         self.motor_right.off()
     
+    def destroy(self):
+        """Clean up resources - stop sensors and motors"""
+        try:
+            self.vl53l0.stop()
+        except Exception as e:
+            print(f"Error stopping VL53L0X: {e}")
+        finally:
+            self.motors_off()
+    
     def setup_interrupts(self):
         """Set up interrupt handlers for all sensors"""
         # Create a closure that captures self for the interrupt handler
@@ -114,13 +140,10 @@ class LineFollowerRobot:
     
     def disable_interrupts(self):
         """Disable interrupt handlers for all sensors"""
-        def handler(p):
-            self.line_follower(p)
-        
-        self.signal_mid_right.irq(handler=handler, trigger=0)
-        self.signal_mid_left.irq(handler=handler, trigger=0)
-        self.signal_far_left.irq(handler=handler, trigger=0)
-        self.signal_far_right.irq(handler=handler, trigger=0)
+        self.signal_mid_right.irq(handler=None)
+        self.signal_mid_left.irq(handler=None)
+        self.signal_far_left.irq(handler=None)
+        self.signal_far_right.irq(handler=None)
 
     def line_follower(self, p):
         """
@@ -199,27 +222,41 @@ class LineFollowerRobot:
         self.turning_case = next_case
         self.count_lines = 0
         print(f"turning_case {case_name} turning")
+
+    def _calculate_distance(self) -> int:
+        """
+        Read distance from VL53L0X sensor.
+        
+        Returns:
+            Distance in millimeters
+        """
+        distance = self.vl53l0.read()
+        # print("Distance:", distance)
+        sleep(0.1)  # Wait for sensor reading
+        return distance if distance is not None else 0
     
     def _handle_turning_cases(self):
         """
         Process turning logic based on current turning case.
         Returns True if final case is complete (should exit), False otherwise.
         """
-        if self.count_lines == 2 and self.turning_case == 0:
+        self._calculate_distance()
+        # TODO: Implement actual distance calculation logic
+        if self.count_lines >= 2 and self._calculate_distance() < 250 and self.turning_case == 0:
             self._execute_turn(self.motor_turn_right, 1, 1, "0")
             
-        elif self.count_lines == 2 and self.turning_case == 1:
+        elif self.count_lines == 2 and self._calculate_distance() < 300 and self.turning_case == 1:
             print("Turning left")
             self._execute_turn(self.motor_turn_left, 1, 2, "1")
             
-        elif self.count_lines == 8 and self.turning_case == 2:
+        elif self.count_lines == 8 and self._calculate_distance() < 300 and self.turning_case == 2:
             self._execute_turn(self.motor_turn_left, 1, 3, "2")
             print("")
             
-        elif self.count_lines == 2 and self.turning_case == 3:
+        elif self.count_lines == 2 and self._calculate_distance() < 300 and self.turning_case == 3:
             self._execute_turn(self.motor_turn_left, 1, 4, "3")
             
-        elif self.count_lines == 8 and self.turning_case == 4:
+        elif self.count_lines == 8 and self._calculate_distance() < 1000 and self.turning_case == 4:
             self._execute_turn(self.motor_turn_left, 2, 5, "4")
             
         elif self.count_lines == 2 and self.turning_case == 5:
@@ -247,6 +284,7 @@ class LineFollowerRobot:
         while True:
             # Handle turning cases - exit if final case is complete
             if self._handle_turning_cases():
+                self.destroy()  # Clean up when finished
                 break
             
             # Apply corrections from interrupt handler if needed
@@ -271,4 +309,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # Clean shutdown on Ctrl+C
         print("\nStopping...")
-        robot.motors_off()
+    finally:
+        # Always clean up resources
+        robot.destroy()
