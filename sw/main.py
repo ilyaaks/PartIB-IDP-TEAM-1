@@ -25,12 +25,18 @@ sensor_right_prev = 0
 far_right_prev = 0
 far_left_prev = 0
 count_lines = 0
-case1 = 0
-case2 = 0
-case3 = 0
-case4 = 0
-case5 = 0
-case6 = 0 
+
+'''
+case diagram:
+    4       3
+    +------+
+    |      |
+    |      |
+    |      |
+    +------+
+    5  6,1  2
+'''
+turning_case = 0
 
 def motor_turn_right():
     global signal_far_left,left_wheel_speed,right_wheel_speed,correction_needed
@@ -51,8 +57,12 @@ def motor_go_straight(speed_left, speed_right, direction="forward"):
     elif direction == "reverse":
         motor_left.Reverse(speed_left)
         motor_right.Reverse(speed_right)
-    else:
-        raise ValueError("Invalid direction: must be 'forward' or 'reverse'")
+
+
+def motors_off():
+    """Turn off both motors"""
+    motor_left.off()
+    motor_right.off()
     
 
 def line_follower(p):
@@ -63,7 +73,7 @@ def line_follower(p):
     sensor_mid_right = signal_mid_right.value()
     sensor_far_left = signal_far_left.value()
     sensor_far_right = signal_far_right.value()
-    print("left: ", sensor_mid_left, " right: ", sensor_mid_right, " far left: ", sensor_far_left, " far right: ", sensor_far_right, " left speed: ", left_wheel_speed, " right speed: ", right_wheel_speed)
+    # print("left: ", sensor_mid_left, " right: ", sensor_mid_right, " far left: ", sensor_far_left, " far right: ", sensor_far_right, " left speed: ", left_wheel_speed, " right speed: ", right_wheel_speed)
     if ((sensor_far_left == 1 or sensor_far_right == 1) and (far_right_prev == 0 and far_left_prev == 0)):  
         count_lines += 1
         far_right_prev = 1
@@ -103,21 +113,9 @@ def line_follower(p):
             motor_turn_right()
             correction_needed = True
         # If both were off previously, no correction needed - continue current trajectory
-
-    # else:
-    #     if turn_left():
-    #         pass
-    #     else:
-            # # go straight
-            # correction_needed = True
-            # pass
         
     sensor_left_prev = sensor_mid_left
     sensor_right_prev = sensor_mid_right
-
-def turn_left():
-    # TODO: Implement logic using distance sensors to determine if a left turn is needed
-    return False
 
 def init():
     # Set up interrupt handlers for line detection
@@ -131,7 +129,7 @@ def init():
     
     
 def main():
-    global left_wheel_speed, right_wheel_speed, correction_needed, count_lines,motor_turn_right,motor_turn_left,case1,case2,case3,case4,case5,case6    
+    global left_wheel_speed, right_wheel_speed, correction_needed, count_lines, motor_turn_right, motor_turn_left, turning_case    
     print("Starting line follower")
     
     # Start moving forward
@@ -139,42 +137,51 @@ def main():
     
     while True:
         # Check if interrupt handler set correction flag
-        if (count_lines == 2 and case1 == 0):
+        if (count_lines == 2 and turning_case == 0):
             motor_turn_right()
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
-            sleep(0.5)
-            case1 = 1
+            sleep(1)
+            turning_case = 1
             count_lines = 0 
-        elif (count_lines == 2 and case2 == 0 and case1 ==1):
+            print("turning_case 0 turning")
+        elif (count_lines == 2 and turning_case == 1):
             print("Turning left")
             motor_turn_left()
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
-            sleep(0.5)
-            case2 = 1
+            sleep(1)
+            turning_case = 2
             count_lines = 0
-        elif (count_lines == 8 and case3 == 0 and case2 ==1):
+            print("turning_case 1 turning")
+        elif (count_lines == 8 and turning_case == 2):
             motor_turn_left()
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
-            sleep(0.5)
-            case3 = 1
+            sleep(1)
+            turning_case = 3
             count_lines = 0
-        elif (count_lines == 3 and case4 == 0 and case3 ==1):
+            print("turning_case 2 turning")
+            print("")
+        elif (count_lines == 2 and turning_case == 3):
             motor_turn_left()
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
-            sleep(0.5)
-            case4 = 1
+            sleep(1)
+            turning_case = 4
             count_lines = 0
-        elif (count_lines == 8 and case5 == 0 and case4 ==1):
+            print("turning_case 3 turning")
+        elif (count_lines == 8 and turning_case == 4):
             motor_turn_left()
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
-            sleep(0.5)
+            sleep(2)
+            turning_case = 5
             count_lines = 0
-        elif (count_lines == 3 and case6 == 0 and case5 ==1):
+            print("turning_case 4 turning")
+        elif (count_lines == 2 and turning_case == 5):
             motor_turn_right()
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
-            sleep(0.5)
-            case6 = 1
-            count_lines = 0
+            sleep(1.5)
+            motor_go_straight(70, 70, direction="forward")
+            sleep (1.5)
+            motors_off()
+            break
         if correction_needed:
             # Apply the new speeds calculated by interrupt handler
             motor_go_straight(left_wheel_speed, right_wheel_speed, direction="forward")
@@ -186,12 +193,10 @@ def main():
 
 if __name__ == "__main__":
     init()
-
     try:
         main()
     except KeyboardInterrupt:
         #Turn everything off
-        motor_left.off()
-        motor_right.off()
+        motors_off()
 
 
