@@ -35,7 +35,7 @@ class LineFollowerRobot:
         self._init_state()
         
         # Start distance sensor
-        self.vl53l0.start()
+        # self.vl53l0.start()
     
     def _init_sensors(self):
         """Initialize all sensor pins"""
@@ -45,12 +45,15 @@ class LineFollowerRobot:
         self.signal_far_left = Pin(self.FAR_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
         
         # config I2C Bus
-        i2c_bus = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
+        # i2c_bus = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
         
         # Setup vl53l0 object
-        self.vl53l0 = VL53L0X(i2c_bus)
-        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
-        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
+        # self.vl53l0 = VL53L0X(i2c_bus)
+        # self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
+        # self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
+
+        # Setup digital button
+        # self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_UP)
 
     
     def _init_motors(self):
@@ -120,7 +123,8 @@ class LineFollowerRobot:
     def destroy(self):
         """Clean up resources - stop sensors and motors"""
         try:
-            self.vl53l0.stop()
+            # self.vl53l0.stop()
+            pass
         except Exception as e:
             print(f"Error stopping VL53L0X: {e}")
         finally:
@@ -158,6 +162,8 @@ class LineFollowerRobot:
         sensor_mid_right = self.signal_mid_right.value()
         sensor_far_left = self.signal_far_left.value()
         sensor_far_right = self.signal_far_right.value()
+
+        print("Sensors:", sensor_mid_left, sensor_mid_right, sensor_far_left, sensor_far_right)
         
         # Line counting logic - detect crossing a perpendicular line
         if ((sensor_far_left == 1 or sensor_far_right == 1) and 
@@ -232,10 +238,11 @@ class LineFollowerRobot:
         Returns:
             Distance in millimeters
         """
-        distance = self.vl53l0.read()
+        # distance = self.vl53l0.read()
         # print("Distance:", distance)
         sleep(0.1)  # Wait for sensor reading
-        return distance if distance is not None else 0
+        # return distance if distance is not None else 0
+        return 0
     
     def _handle_turning_cases(self):
         """
@@ -304,6 +311,9 @@ if __name__ == "__main__":
     
     # Set up interrupt handlers
     robot.setup_interrupts()
+    while(True):
+        robot.line_follower(None)
+
     
     try:
         # Run the main control loop
