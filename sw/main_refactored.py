@@ -17,10 +17,10 @@ class LineFollowerRobot:
     MAX_SPEED = 100
     
     # Pin configurations
-    MID_RIGHT_PIN = 21
-    MID_LEFT_PIN = 20
-    FAR_RIGHT_PIN = 22
-    FAR_LEFT_PIN = 19
+    MID_RIGHT_PIN = 26
+    MID_LEFT_PIN = 27
+    FAR_RIGHT_PIN = 28
+    FAR_LEFT_PIN = 22
 
     SDA_PIN = 8
     SCL_PIN = 9
@@ -216,11 +216,13 @@ class LineFollowerRobot:
             next_case: Next turning_case value
             case_name: Name of current case for logging
         """
+        self.disable_interrupts()
         turn_function()
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
         sleep(sleep_time)
         self.turning_case = next_case
         self.count_lines = 0
+        self.setup_interrupts()
         print(f"turning_case {case_name} turning")
 
     def _calculate_distance(self) -> int:
@@ -257,7 +259,7 @@ class LineFollowerRobot:
             self._execute_turn(self.motor_turn_left, 1, 4, "3")
             
         elif self.count_lines == 8 and self._calculate_distance() < 1000 and self.turning_case == 4:
-            self._execute_turn(self.motor_turn_left, 2, 5, "4")
+            self._execute_turn(self.motor_turn_left, 1.5, 5, "4")
             
         elif self.count_lines == 2 and self.turning_case == 5:
             # Final approach sequence
