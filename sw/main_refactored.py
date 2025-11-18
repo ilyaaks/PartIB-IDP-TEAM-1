@@ -2,6 +2,7 @@ from machine import Pin, I2C
 from utime import sleep, ticks_ms, ticks_diff
 from sw.test_motor import Motor
 # from sw.libs.VL53L0X.VL53L0X import VL53L0X
+from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 
 
 class LineFollowerRobot:
