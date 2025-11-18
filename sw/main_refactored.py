@@ -1,7 +1,7 @@
 from machine import Pin, I2C
-from utime import sleep
+from utime import sleep, ticks_ms, ticks_diff
 from sw.test_motor import Motor
-from sw.libs.VL53L0X.VL53L0X import VL53L0X
+# from sw.libs.VL53L0X.VL53L0X import VL53L0X
 
 
 class LineFollowerRobot:
@@ -24,6 +24,9 @@ class LineFollowerRobot:
 
     SDA_PIN = 8
     SCL_PIN = 9
+
+    BUTTON_PIN = 9999
+    DEBOUNCE_MS = 200
     
     def __init__(self):
         """Initialize robot hardware and state"""
@@ -87,6 +90,8 @@ class LineFollowerRobot:
             5  6,1  2
         '''
         self.turning_case = 0
+        self.is_running = False
+        self.last_button_time = 0
     
     def motor_turn_right(self):
         """Configure motor speeds for right turn"""
@@ -142,12 +147,48 @@ class LineFollowerRobot:
         self.signal_far_left.irq(handler=handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
         self.signal_far_right.irq(handler=handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
     
+        # Enable interrupts for button 
+        self.button.irq(handler=self.button_handler, trigger=Pin.IRQ_FALLING) 
+
     def disable_interrupts(self):
         """Disable interrupt handlers for all sensors"""
         self.signal_mid_right.irq(handler=None)
         self.signal_mid_left.irq(handler=None)
         self.signal_far_left.irq(handler=None)
         self.signal_far_right.irq(handler=None)
+
+        # do NOT disable interrupt for button
+
+    def button_handler(self, p):
+        """
+        Interrupt handler for button press.
+        Toggles robot state between running and stopped.
+
+        Args:
+            p: Pin that triggered the interrupt
+        """
+        current_time = ticks_ms()
+        
+        # Debounce: ignore if button pressed too soon after last press
+        if ticks_diff(current_time, self.last_button_time) < self.DEBOUNCE_MS:
+            return
+        
+        self.last_button_time = current_time
+        
+        # Toggle running state
+        if self.is_running:
+            # Stop the robot
+            print("Button pressed - Stopping robot")
+            self.is_running = False
+            self.destroy()
+        else:
+            # Start the robot
+            print("Button pressed - Starting robot")
+            self.is_running = True
+            # Reset state for fresh start
+            self.count_lines = 0
+            self.turning_case = 0
+            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
 
     def line_follower(self, p):
         """
@@ -157,6 +198,10 @@ class LineFollowerRobot:
         Args:
             p: Pin that triggered the interrupt
         """
+
+        if not self.is_running:
+            return
+
         # Read current sensor values
         sensor_mid_left = self.signal_mid_left.value()
         sensor_mid_right = self.signal_mid_right.value()
@@ -285,14 +330,20 @@ class LineFollowerRobot:
         Main control loop for the line follower.
         Continuously monitors sensors and adjusts motors until sequence is complete.
         """
-        print("Starting line follower")
+        print("Robot ready. Press button to start...")
+
+        while not self.is_running:
+            sleep(0.1)
+
+        print("Start line follower")
         
         # Start moving forward
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
         
-        while True:
+        while self.is_running:
             # Handle turning cases - exit if final case is complete
             if self._handle_turning_cases():
+                self.is_running = False
                 self.destroy()  # Clean up when finished
                 break
             
@@ -303,6 +354,8 @@ class LineFollowerRobot:
             
             # Small delay to allow system to respond
             sleep(0.01)
+
+        print("Robot stopped. Press button to restart...")
 
 
 if __name__ == "__main__":
