@@ -24,5 +24,17 @@ def test_pin(pin_number):
         test.value(0)
         print(f"\nPIN {pin_number} set to OFF")
 
+def test_input_pin(pin_number):
+    """
+    Test a GPIO pin by reading its state.
+    Args:
+        pin_number (int): The GPIO pin number to test.
+    """
+    test = Pin(pin_number, Pin.IN, Pin.PULL_UP)
+    state = test.value()
+    status = "ON" if state else "OFF"
+    print(f"PIN {pin_number}: {status}")
+
 if __name__ == "__main__": 
-    test_pin(4)
+    test_pin(14)
+
