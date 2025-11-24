@@ -4,8 +4,8 @@ from utime import sleep
 
 def test_vl53l0x():
     # config I2C Bus
-    i2c_bus = I2C(id=0, sda=Pin(20), scl=Pin(21)) # I2C0 on GP20 & GP21
-    # print(i2c_bus.scan())  # Get the address (nb 41=0xx29, 82=0x52)
+    i2c_bus = I2C(id=1, sda=Pin(18), scl=Pin(19), freq = 400000) # I2C0 on GP20 & GP21
+    print(i2c_bus.scan())  # Get the address (nb 41=0xx29, 82=0x52)
     
     # Setup vl53l0 object
     vl53l0 = VL53L0X(i2c_bus)
