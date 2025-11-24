@@ -78,7 +78,6 @@ class LineFollowerRobot:
         # Motor speeds
         self.left_wheel_speed = self.BASE_SPEED
         self.right_wheel_speed = self.BASE_SPEED
-        self.correction_needed = False
         
         # Sensor state tracking
         self.sensor_left_prev = 0
@@ -265,12 +264,13 @@ class LineFollowerRobot:
             # Apply correction (positive error increases left, decreases right)
             self.left_wheel_speed = int(max(min(self.BASE_SPEED + correction, self.MAX_SPEED), self.MIN_SPEED))
             self.right_wheel_speed = int(max(min(self.BASE_SPEED - correction, self.MAX_SPEED), self.MIN_SPEED))
-            self.correction_needed = True
         else:
             # On track - maintain base speed
             self.left_wheel_speed = self.BASE_SPEED
             self.right_wheel_speed = self.BASE_SPEED
-            self.correction_needed = True
+        
+        # Apply motor speeds immediately (no delay waiting for main loop)
+        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
         
         # Update previous sensor states
         self.sensor_left_prev = sensor_mid_left
@@ -413,13 +413,8 @@ class LineFollowerRobot:
                 self.destroy()  # Clean up when finished
                 break
             
-            # Apply corrections from interrupt handler if needed
-            if self.correction_needed:
-                self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
-                self.correction_needed = False
-            
-            # Small delay to allow system to respond
-            sleep(0.01)
+            # Longer sleep since interrupts handle line following immediately
+            sleep(0.05)  # Reduced from 100Hz to 20Hz polling
 
         print("Robot stopped. Press button to restart...")
 
