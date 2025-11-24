@@ -301,12 +301,12 @@ class LineFollowerRobot:
         Read distance from VL53L0X sensor.
         
         Returns:
-            Distance in millimeters
+            Distance in millimeters, or 9999 if sensor fails
         """
         distance = self.vl53l0.read()
         print(">>> Dist: ", distance)
         sleep(0.1)  # Wait for sensor reading
-        return distance if distance is not None else 0
+        return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
     
     def _handle_turning_cases(self):
         """
@@ -315,12 +315,6 @@ class LineFollowerRobot:
         """
         # Calculate distance once and cache it for all conditions
         distance = self._calculate_distance()
-        
-        # Read current sensor values
-        sensor_mid_left = self.signal_mid_left.value()
-        sensor_mid_right = self.signal_mid_right.value()
-        sensor_far_left = self.signal_far_left.value()
-        sensor_far_right = self.signal_far_right.value()
 
         if self.count_lines > 1 and distance < 250 and self.turning_case == 0:
             # if (sensor_far_right == 1):
