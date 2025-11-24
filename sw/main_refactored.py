@@ -1,7 +1,7 @@
 from machine import Pin, I2C
 from utime import sleep, ticks_ms, ticks_diff
 from sw.test_motor import Motor
-from sw.libs.VL53L0X.VL53L0X import VL53L0X
+# from sw.libs.VL53L0X.VL53L0X import VL53L0X
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 # from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
 
@@ -50,7 +50,7 @@ class LineFollowerRobot:
         self._init_state()
         
         # Start distance sensor
-        self.vl53l0.start()
+        # self.vl53l0.start()
     
     def _init_sensors(self):
         """Initialize all sensor pins"""
@@ -60,12 +60,12 @@ class LineFollowerRobot:
         self.signal_far_left = Pin(self.FAR_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
         
         # config I2C Bus
-        i2c_bus_vl5310 = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
+        # i2c_bus_vl5310 = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
         
-        # Setup vl53l0 object
-        self.vl53l0 = VL53L0X(i2c_bus_vl5310)
-        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
-        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
+        # # Setup vl53l0 object
+        # self.vl53l0 = VL53L0X(i2c_bus_vl5310)
+        # self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
+        # self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
 
         # Setup digital button
         # self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_UP)  # Not connected yet
@@ -103,19 +103,19 @@ class LineFollowerRobot:
             +------+
             5  6,1  2
         '''
-        self.turning_case = 4
+        self.turning_case = 0
         self.is_running = True  # Start immediately since button not connected
         # self.last_button_time = 0
     
     def motor_turn_right(self):
         """Configure motor speeds for right turn"""
         self.left_wheel_speed = self.MAX_SPEED
-        self.right_wheel_speed = 15
+        self.right_wheel_speed = 0
         
     
     def motor_turn_left(self):
         """Configure motor speeds for left turn"""
-        self.left_wheel_speed = 15
+        self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
     
     def motor_go_straight(self, speed_left, speed_right, direction="forward"):
@@ -155,23 +155,16 @@ class LineFollowerRobot:
         def line_handler(p):
             self.line_follower(p)
         
-        def count_rising_handler(p):
-            self.line_counter_rising(p)
-        
-        def count_falling_handler(p):
-            self.line_counter_falling(p)
+        def count_handler(p):
+            self.line_counter(p)
         
         # Attach interrupt handlers to mid sensor pins for line following
         self.signal_mid_right.irq(handler=line_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
         self.signal_mid_left.irq(handler=line_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
         
-        # Attach interrupt handlers to far sensor pins for line counting
-        # Rising edge: count the line
-        self.signal_far_left.irq(handler=count_rising_handler, trigger=Pin.IRQ_RISING)
-        self.signal_far_right.irq(handler=count_rising_handler, trigger=Pin.IRQ_RISING)
-        # Falling edge: reset the flag
-        self.signal_far_left.irq(handler=count_falling_handler, trigger=Pin.IRQ_FALLING, append=True)
-        self.signal_far_right.irq(handler=count_falling_handler, trigger=Pin.IRQ_FALLING, append=True)
+        # Attach interrupt handlers to far sensor pins for line counting (both rising and falling edges)
+        self.signal_far_left.irq(handler=count_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+        self.signal_far_right.irq(handler=count_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
     
         # Enable interrupts for button (not connected yet)
         # self.button.irq(handler=self.button_handler, trigger=Pin.IRQ_FALLING) 
@@ -180,8 +173,8 @@ class LineFollowerRobot:
         """Disable interrupt handlers for all sensors"""
         self.signal_mid_right.irq(handler=None)
         self.signal_mid_left.irq(handler=None)
-        self.signal_far_left.irq(handler=None)
-        self.signal_far_right.irq(handler=None)
+        # self.signal_far_left.irq(handler=None)
+        # self.signal_far_right.irq(handler=None)
 
     def _path_algorithm(self, current_position, desired_position):
         '''
@@ -195,7 +188,8 @@ class LineFollowerRobot:
         '''
 
         if (current_position.startswith("G") and desired_position.startswith("B0")):
-            return Path._path_G_to_B0(current_position, desired_position)
+            lines, turns = Path._path_G_to_B0(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
         if (current_position.startswith("G") and desired_position.startswith("B1")):
             return Path._path_G_to_B1(current_position, desired_position)
         if (current_position.startswith("G") and desired_position.startswith("A0")):
@@ -245,11 +239,12 @@ class LineFollowerRobot:
     #         self.turning_case = 0
     #         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
 
-    def line_counter_rising(self, p):
+    def line_counter(self, p):
         """
-        Interrupt handler for line counting (rising edge).
+        Interrupt handler for line counting (both rising and falling edges).
         Detects when robot crosses perpendicular lines using far sensors.
-        Only triggered on rising edge (0→1 transition).
+        - Rising edge (0→1): Increments line count
+        - Falling edge (1→0): Resets the on_perpendicular_line flag when both sensors are off
         
         Args:
             p: Pin that triggered the interrupt
@@ -257,31 +252,23 @@ class LineFollowerRobot:
         if not self.is_running:
             return
         
-        # Only count if not already on a perpendicular line (prevents double counting)
-        if not self.on_perpendicular_line:
-            self.count_lines += 1
-            self.on_perpendicular_line = True
-            print("Lines detected:", self.count_lines)
-    
-    def line_counter_falling(self, p):
-        """
-        Interrupt handler for resetting line counter flag (falling edge).
-        Resets the flag when robot leaves the perpendicular line.
-        Only triggered on falling edge (1→0 transition).
-        
-        Args:
-            p: Pin that triggered the interrupt
-        """
-        if not self.is_running:
-            return
-        
-        # Check if both far sensors are off before resetting
+        # Read current sensor values
         sensor_far_left = self.signal_far_left.value()
         sensor_far_right = self.signal_far_right.value()
         
-        if sensor_far_left == 0 and sensor_far_right == 0:
-            # Both sensors off - we've left the perpendicular line
+        # Check if either sensor is detecting a line (rising edge case)
+        if (sensor_far_left == 1 or sensor_far_right == 1) and not self.on_perpendicular_line:
+            # Rising edge detected - count the line
+            self.count_lines += 1
+            print("========================here========================")
+            self.on_perpendicular_line = True
+            print("Lines detected:", self.count_lines)
+        
+        # Check if both sensors are off the line (falling edge case)
+        elif sensor_far_left == 0 and sensor_far_right == 0 and self.on_perpendicular_line:
+            # Falling edge detected - reset the flag
             self.on_perpendicular_line = False
+            print("Left perpendicular line")
 
     def line_follower(self, p):
         """
@@ -369,47 +356,62 @@ class LineFollowerRobot:
         self.setup_interrupts()
         print(f"end: turning_case {case_name} turning")
 
-    def _calculate_distance(self) -> int:
-        """
-        Read distance from VL53L0X sensor.
+    # def _calculate_distance(self) -> int:
+    #     """
+    #     Read distance from VL53L0X sensor.
         
-        Returns:
-            Distance in millimeters, or 9999 if sensor fails
-        """
-        distance = self.vl53l0.read()
-        print(">>> Dist: ", distance)
-        sleep(0.1)  # Wait for sensor reading
-        return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
+    #     Returns:
+    #         Distance in millimeters, or 9999 if sensor fails
+    #     """
+    #     distance = self.vl53l0.read()
+    #     print(">>> Dist: ", distance)
+    #     sleep(0.1)  # Wait for sensor reading
+    #     return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
     
+    def _handle_identifying_cases(self, turns, lines):
+        Position_is_achieved = False
+        while not Position_is_achieved:
+            distance = self._calculate_distance()
+            for i in range(len(lines)):
+                if self.count_lines == lines[i]:
+                    if turns[i] == "right":
+                        self._execute_turn(self.motor_turn_right, 1, 1, "0")
+                    else: 
+                        self._execute_turn(self.motor_turn_left, 1, 1, "0")
+        pass
+
+
     def _handle_turning_cases(self):
         """
         Process turning logic based on current turning case.
         Returns True if final case is complete (should exit), False otherwise.
         """
         # Calculate distance once and cache it for all conditions
-        distance = self._calculate_distance()
+        # distance = self._calculate_distance()
 
-        if self.count_lines > 1 and distance < 250 and self.turning_case == 0:
+        print("Current turning_case:", self.turning_case, " Lines counted:", self.count_lines)
+
+        if self.count_lines == 2  and self.turning_case == 0:
             # if (sensor_far_right == 1):
             self._execute_turn(self.motor_turn_right, 1, 1, "0")
             
 
-        elif self.count_lines > 1 and distance < 300 and self.turning_case == 1:
+        elif self.count_lines ==2 and self.turning_case == 1:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1, 2, "1")
             
             
-        elif self.count_lines > 6 and distance < 300 and self.turning_case == 2:
+        elif self.count_lines == 8 and self.turning_case == 2:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1, 3, "2")
             
             
-        elif self.count_lines > 1 and distance < 300 and self.turning_case == 3:
+        elif self.count_lines == 2 and self.turning_case == 3:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1, 4, "3")
             
             
-        elif self.count_lines > 6 and distance < 1000 and self.turning_case == 4:
+        elif self.count_lines == 8 and self.turning_case == 4:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1.5, 5, "4")
             
@@ -510,6 +512,7 @@ if __name__ == "__main__":
 
 
 """ TODO
+
 # from G0 to B01
 # return ["right", 1, "left", 0]
 
