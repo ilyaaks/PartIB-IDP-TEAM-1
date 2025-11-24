@@ -17,6 +17,9 @@ class LineFollowerRobot:
     SPEED_ADJUSTMENT = 5
     MIN_SPEED = 35
     MAX_SPEED = 65
+    
+    # Proportional control parameters
+    KP = 8  # Proportional gain for steering correction
 
     # Pin configurations
     MID_RIGHT_PIN = 26
@@ -226,38 +229,48 @@ class LineFollowerRobot:
             # Falling edge: left the perpendicular line
             self.on_perpendicular_line = False
         
-        # Adjust speeds based on sensor readings
+        # Proportional control for line following
+        # Calculate error: -1 (left of line), 0 (on line), +1 (right of line)
+        error = 0
+        
         if sensor_mid_right == 1 and sensor_mid_left == 0:
-            # Right sensor on line - car drifting right, turn left
-            self.left_wheel_speed = max(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MIN_SPEED)
-            self.right_wheel_speed = min(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MAX_SPEED)
-            self.correction_needed = True
+            # Right sensor on line - car drifting right
+            error = 1  # Positive error: need to turn left
             
         elif sensor_mid_left == 1 and sensor_mid_right == 0:
-            # Left sensor on line - car drifting left, turn right
-            self.left_wheel_speed = min(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MAX_SPEED)
-            self.right_wheel_speed = max(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MIN_SPEED)
-            self.correction_needed = True
+            # Left sensor on line - car drifting left
+            error = -1  # Negative error: need to turn right
             
         elif sensor_mid_left == 1 and sensor_mid_right == 1:
             # Both on line - go straight
+            error = 0
+            
+        else:
+            # Both sensors off line - use previous state for aggressive correction
+            if self.sensor_left_prev == 1 and self.sensor_right_prev == 0:
+                # Last seen left on line - turn left aggressively
+                error = 1.5  # Larger error for stronger correction
+            elif self.sensor_right_prev == 1 and self.sensor_left_prev == 0:
+                # Last seen right on line - turn right aggressively
+                error = -1.5  # Larger error for stronger correction
+            else:
+                # No correction needed - continue current trajectory
+                error = 0
+        
+        # Apply proportional control if error detected
+        if error != 0:
+            # Calculate speed adjustment based on error magnitude
+            correction = self.KP * error
+            
+            # Apply correction (positive error increases left, decreases right)
+            self.left_wheel_speed = int(max(min(self.BASE_SPEED + correction, self.MAX_SPEED), self.MIN_SPEED))
+            self.right_wheel_speed = int(max(min(self.BASE_SPEED - correction, self.MAX_SPEED), self.MIN_SPEED))
+            self.correction_needed = True
+        else:
+            # On track - maintain base speed
             self.left_wheel_speed = self.BASE_SPEED
             self.right_wheel_speed = self.BASE_SPEED
             self.correction_needed = True
-            
-        else:
-            # Both sensors off line - use previous state to determine recovery direction
-            if self.sensor_left_prev == 1 and self.sensor_right_prev == 0:
-                # Last seen left on line - turn left to find line
-                self.left_wheel_speed = self.MIN_SPEED
-                self.right_wheel_speed = self.MAX_SPEED
-                self.correction_needed = True
-            elif self.sensor_right_prev == 1 and self.sensor_left_prev == 0:
-                # Last seen right on line - turn right to find line
-                self.left_wheel_speed = self.MAX_SPEED
-                self.right_wheel_speed = self.MIN_SPEED
-                self.correction_needed = True
-            # If both were off previously, no correction needed - continue current trajectory
         
         # Update previous sensor states
         self.sensor_left_prev = sensor_mid_left
