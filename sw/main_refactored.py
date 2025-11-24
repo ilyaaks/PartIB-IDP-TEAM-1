@@ -313,34 +313,36 @@ class LineFollowerRobot:
         Process turning logic based on current turning case.
         Returns True if final case is complete (should exit), False otherwise.
         """
-        self._calculate_distance()
+        # Calculate distance once and cache it for all conditions
+        distance = self._calculate_distance()
+        
         # Read current sensor values
         sensor_mid_left = self.signal_mid_left.value()
         sensor_mid_right = self.signal_mid_right.value()
         sensor_far_left = self.signal_far_left.value()
         sensor_far_right = self.signal_far_right.value()
 
-        if self.count_lines > 1 and self._calculate_distance() < 250 and self.turning_case == 0:
+        if self.count_lines > 1 and distance < 250 and self.turning_case == 0:
             # if (sensor_far_right == 1):
             self._execute_turn(self.motor_turn_right, 1, 1, "0")
             
 
-        elif self.count_lines > 1 and self._calculate_distance() < 300 and self.turning_case == 1:
+        elif self.count_lines > 1 and distance < 300 and self.turning_case == 1:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1, 2, "1")
             
             
-        elif self.count_lines > 6 and self._calculate_distance() < 300 and self.turning_case == 2:
+        elif self.count_lines > 6 and distance < 300 and self.turning_case == 2:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1, 3, "2")
             
             
-        elif self.count_lines > 1 and self._calculate_distance() < 300 and self.turning_case == 3:
+        elif self.count_lines > 1 and distance < 300 and self.turning_case == 3:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1, 4, "3")
             
             
-        elif self.count_lines > 6 and self._calculate_distance() < 1000 and self.turning_case == 4:
+        elif self.count_lines > 6 and distance < 1000 and self.turning_case == 4:
             # if (sensor_far_left == 1) :
             self._execute_turn(self.motor_turn_left, 1.5, 5, "4")
             
