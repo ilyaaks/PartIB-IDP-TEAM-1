@@ -1,6 +1,7 @@
 from machine import Pin, I2C
 from utime import sleep, ticks_ms, ticks_diff
 from sw.test_motor import Motor
+from sw.path import Path
 # from sw.libs.VL53L0X.VL53L0X import VL53L0X
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 # from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
@@ -26,7 +27,7 @@ class LineFollowerRobot:
     ]
     
     # Proportional control parameters
-    KP = 8  # Proportional gain for steering correction
+    KP = 4  # Proportional gain for steering correction
 
     # Pin configurations
     MID_RIGHT_PIN = 26
@@ -369,17 +370,41 @@ class LineFollowerRobot:
     #     return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
     
     def _handle_identifying_cases(self, turns, lines):
-        Position_is_achieved = False
-        while not Position_is_achieved:
-            distance = self._calculate_distance()
-            for i in range(len(lines)):
-                if self.count_lines == lines[i]:
-                    if turns[i] == "right":
-                        self._execute_turn(self.motor_turn_right, 1, 1, "0")
-                    else: 
-                        self._execute_turn(self.motor_turn_left, 1, 1, "0")
-        pass
-
+        """
+        Navigate through a sequence of turns based on line counts.
+        
+        Args:
+            turns: List of turn directions ("right", "left", or "straight")
+            lines: List of line counts at which to execute each turn
+        """
+        current_instruction = 0  # Track which instruction we're on
+        
+        while current_instruction < len(lines):
+            # Check if we've reached the line count for the current instruction
+            if self.count_lines >= lines[current_instruction]:
+                print(f"Lines matched: {lines[current_instruction]} for turn: {turns[current_instruction]}")
+                
+                if turns[current_instruction] == "right":
+                    self._execute_turn(self.motor_turn_right, 1.5, current_instruction + 1, str(current_instruction))
+                elif turns[current_instruction] == "left": 
+                    self._execute_turn(self.motor_turn_left, 1.5, current_instruction + 1, str(current_instruction))
+                elif turns[current_instruction] == "straight":
+                    # Continue straight - just increment instruction counter
+                    print(f"Continuing straight past line {lines[current_instruction]}")
+                
+                # Move to next instruction
+                current_instruction += 1
+            
+            # Small delay to avoid tight loop
+            sleep(0.05)
+        
+        # All instructions completed
+        print("Navigation sequence complete")
+        current_lines = self.count_lines
+        while True:
+            if self.count_lines > current_lines:
+                self.motors_off()
+                break
 
     def _handle_turning_cases(self):
         """
@@ -476,14 +501,13 @@ class LineFollowerRobot:
         
         # Start moving forward
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
-        
+        self._path_algorithm("G0", "B01")
         while self.is_running:
             # Handle turning cases - exit if final case is complete
             if self._handle_turning_cases():
                 self.is_running = False
                 self.destroy()  # Clean up when finished
                 break
-            
             # Longer sleep since interrupts handle line following immediately
             sleep(0.05)  # Reduced from 100Hz to 20Hz polling
 
