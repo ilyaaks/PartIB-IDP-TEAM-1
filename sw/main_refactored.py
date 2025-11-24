@@ -144,15 +144,27 @@ class LineFollowerRobot:
     
     def setup_interrupts(self):
         """Set up interrupt handlers for all sensors"""
-        # Create a closure that captures self for the interrupt handler
-        def handler(p):
+        # Create closures that capture self for the interrupt handlers
+        def line_handler(p):
             self.line_follower(p)
         
-        # Attach interrupt handlers to all sensor pins
-        self.signal_mid_right.irq(handler=handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
-        self.signal_mid_left.irq(handler=handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
-        self.signal_far_left.irq(handler=handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
-        self.signal_far_right.irq(handler=handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+        def count_rising_handler(p):
+            self.line_counter_rising(p)
+        
+        def count_falling_handler(p):
+            self.line_counter_falling(p)
+        
+        # Attach interrupt handlers to mid sensor pins for line following
+        self.signal_mid_right.irq(handler=line_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+        self.signal_mid_left.irq(handler=line_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
+        
+        # Attach interrupt handlers to far sensor pins for line counting
+        # Rising edge: count the line
+        self.signal_far_left.irq(handler=count_rising_handler, trigger=Pin.IRQ_RISING)
+        self.signal_far_right.irq(handler=count_rising_handler, trigger=Pin.IRQ_RISING)
+        # Falling edge: reset the flag
+        self.signal_far_left.irq(handler=count_falling_handler, trigger=Pin.IRQ_FALLING, append=True)
+        self.signal_far_right.irq(handler=count_falling_handler, trigger=Pin.IRQ_FALLING, append=True)
     
         # Enable interrupts for button (not connected yet)
         # self.button.irq(handler=self.button_handler, trigger=Pin.IRQ_FALLING) 
@@ -197,6 +209,44 @@ class LineFollowerRobot:
     #         self.turning_case = 0
     #         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
 
+    def line_counter_rising(self, p):
+        """
+        Interrupt handler for line counting (rising edge).
+        Detects when robot crosses perpendicular lines using far sensors.
+        Only triggered on rising edge (0→1 transition).
+        
+        Args:
+            p: Pin that triggered the interrupt
+        """
+        if not self.is_running:
+            return
+        
+        # Only count if not already on a perpendicular line (prevents double counting)
+        if not self.on_perpendicular_line:
+            self.count_lines += 1
+            self.on_perpendicular_line = True
+            print("Lines detected:", self.count_lines)
+    
+    def line_counter_falling(self, p):
+        """
+        Interrupt handler for resetting line counter flag (falling edge).
+        Resets the flag when robot leaves the perpendicular line.
+        Only triggered on falling edge (1→0 transition).
+        
+        Args:
+            p: Pin that triggered the interrupt
+        """
+        if not self.is_running:
+            return
+        
+        # Check if both far sensors are off before resetting
+        sensor_far_left = self.signal_far_left.value()
+        sensor_far_right = self.signal_far_right.value()
+        
+        if sensor_far_left == 0 and sensor_far_right == 0:
+            # Both sensors off - we've left the perpendicular line
+            self.on_perpendicular_line = False
+
     def line_follower(self, p):
         """
         Interrupt handler for line sensors.
@@ -209,24 +259,11 @@ class LineFollowerRobot:
         if not self.is_running:
             return
 
-        # Read current sensor values
+        # Read current sensor values (only mid sensors needed for line following)
         sensor_mid_left = self.signal_mid_left.value()
         sensor_mid_right = self.signal_mid_right.value()
-        sensor_far_left = self.signal_far_left.value()
-        sensor_far_right = self.signal_far_right.value()
 
-        print("far left: ", sensor_far_left, " mid left: ", sensor_mid_left, " mid right: ", sensor_mid_right, " far right: ", sensor_far_right)
-        # Line counting logic - detect crossing a perpendicular line (rising edge detection)
-        far_sensors_active = sensor_far_left == 1 or sensor_far_right == 1
-        
-        if far_sensors_active and not self.on_perpendicular_line:
-            # Rising edge: just encountered a perpendicular line
-            self.count_lines += 1
-            self.on_perpendicular_line = True
-            print("Lines detected:", self.count_lines)
-        elif not far_sensors_active and self.on_perpendicular_line:
-            # Falling edge: left the perpendicular line
-            self.on_perpendicular_line = False
+        print("mid left: ", sensor_mid_left, " mid right: ", sensor_mid_right)
         
         # Proportional control for line following
         # Calculate error: -1 (left of line), 0 (on line), +1 (right of line)
