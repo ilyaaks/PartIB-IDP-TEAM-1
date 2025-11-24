@@ -17,6 +17,13 @@ class LineFollowerRobot:
     SPEED_ADJUSTMENT = 5
     MIN_SPEED = 35
     MAX_SPEED = 65
+
+    SEARCH_LIST = [
+        "B01", "B02", "B03", "B04", "B05", "B06", 
+        "B16", "B15", "B14", "B13", "B12", "B11", 
+        "A16", "A15", "A14", "A13", "A12", "A11",
+        "A06", "A05", "A04", "A03", "A02", "A01"
+    ]
     
     # Proportional control parameters
     KP = 8  # Proportional gain for steering correction
@@ -175,6 +182,35 @@ class LineFollowerRobot:
         self.signal_mid_left.irq(handler=None)
         self.signal_far_left.irq(handler=None)
         self.signal_far_right.irq(handler=None)
+
+    def _path_algorithm(self, current_position, desired_position):
+        '''
+        Args:  "GB", "GG", "G0", "GY", "GR"
+        "B01", "B02", "B03", "B04", "B05", "B06", 
+        "B16", "B15", "B14", "B13", "B12", "B11", 
+        "A16", "A15", "A14", "A13", "A12", "A11",
+        "A06", "A05", "A04", "A03", "A02", "A01"
+
+        return a list of commands to go from current to desired position
+        '''
+
+        if (current_position.startswith("G") and desired_position.startswith("B0")):
+            return Path._path_G_to_B0(current_position, desired_position)
+        if (current_position.startswith("G") and desired_position.startswith("B1")):
+            return Path._path_G_to_B1(current_position, desired_position)
+        if (current_position.startswith("G") and desired_position.startswith("A0")):
+            return Path._path_G_to_A0(current_position, desired_position)
+        if (current_position.startswith("G") and desired_position.startswith("A1")):
+            return Path._path_G_to_A1(current_position, desired_position)
+        if (current_position.startswith("B0") and desired_position.startswith("G")):
+            return Path._path_B0_to_G(current_position, desired_position)
+        if (current_position.startswith("B1") and desired_position.startswith("G")):
+            return Path._path_B1_to_G(current_position, desired_position)
+        if (current_position.startswith("A0") and desired_position.startswith("G")):
+            return Path._path_A0_to_G(current_position, desired_position)
+        if (current_position.startswith("A1") and desired_position.startswith("G")):
+            return Path._path_A1_to_G(current_position, desired_position)
+
 
         # do NOT disable interrupt for button
 
@@ -468,3 +504,22 @@ if __name__ == "__main__":
     finally:
         # Always clean up resources
         robot.destroy()
+
+
+
+
+
+""" TODO
+# from G0 to B01
+# return ["right", 1, "left", 0]
+
+for (command in commands):
+    if command == "right":
+        motor_turn_right()
+    elif command == "left":
+        motor_turn_left()
+    else:
+        go straight for %d lines and stop
+
+
+"""
