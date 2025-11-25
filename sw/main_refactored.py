@@ -539,11 +539,12 @@ class LineFollowerRobot:
 
         current_position = destination[0:2] + str(temp_line_counter)
 
-        self._before_pick_box(current_position)
+        self._before_pick_box(destination)
         colour = self._detect_colour()
         position_to_go = "G" + colour[0]
         self._do_pick_box()        # pick the box
         self._after_pick_box(current_position) # reverse, do the turning
+        #Depending on the colour we go to a different bay
         self._path_algorithm(current_position, position_to_go)
         return current_position, position_to_go
 
@@ -555,7 +556,43 @@ class LineFollowerRobot:
             bool: True if box detected, False otherwise
         """
         return False
-    
+    def _before_pick_box(self, current_position: str):
+        if current_position[0:2] == "B0":
+            self._execute_turn(self.motor_turn_left, 1.5, 0, "before_pick_box")
+            if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
+                self.motor_off()
+        elif current_position[0:2] == "A0":
+            self._execute_turn(self.motor_turn_right, 1.5, 0, "before_pick_box")
+            if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
+                self.motor_off()
+        elif current_position[0:2] == "B1":
+            self._execute_turn(self.motor_turn_right, 1.5, 0, "before_pick_box")
+            if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
+                self.motor_off()
+        elif current_position[0:2] == "A1":
+            self._execute_turn(self.motor_turn_left, 1.5, 0, "before_pick_box")
+            if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
+                self.motor_off()
+        
+    def after_pick_box(self, current_position):
+        """ First we want to reverse out and then go to the ground position"""
+        if current_position[0:2] == "B0" or current_position[0:2] == "A1":
+            self.direction_flag = "reverse"
+            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay = 1)
+            self._execute_turn(self.motor_turn_right_back, 1.5, 0, "after_pick_box")
+            self.direction_flag = "forward"
+            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+            while (self.signal_far_right.value()==1):
+                pass
+        elif current_position[0:2] == "B1" or current_position[0:2] == "A0":
+            self.direction_flag = "reverse"
+            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay = 1)
+            self._execute_turn(self.motor_turn_left_back, 1.5, 0, "after_pick_box")
+            self.direction_flag = "forward"
+            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+            while (self.signal_far_left.value()==1):
+                pass
+
     def _detect_colour(self) -> str:
         """
         Detect the color of the box under the robot using the color sensor.
