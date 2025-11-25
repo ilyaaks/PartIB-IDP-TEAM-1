@@ -125,7 +125,6 @@ class LineFollowerRobot:
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(1)
         while (self.signal_mid_left.value()==0):
             pass
     def motor_turn_right_back(self):
@@ -133,14 +132,14 @@ class LineFollowerRobot:
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        while (self.signal_mid_left.value()==1):
+        while (self.signal_far_right.value()==0):
             pass
     def motor_turn_left_back(self):
         """Configure motor speeds for left turn"""
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        while (self.signal_mid_right.value()==1):
+        while (self.signal_far_left.value()==0):
             pass
 
     def motor_go_straight(self, speed_left, speed_right,delay = 0):
@@ -429,8 +428,8 @@ class LineFollowerRobot:
                     self._execute_turn(self.motor_turn_left_back, 1.5, current_instruction + 1, str(current_instruction))
                 elif turns[current_instruction] == "reverse":
                     self.direction_flag = "reverse"
-                    self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-                
+                    self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay = 1)
+            
                 # Move to next instruction
                 current_instruction += 1
             
@@ -528,7 +527,45 @@ class LineFollowerRobot:
     #             closest_color = color
 
     #     return closest_color
+    def pick_box(self, start = "G0", destination = "B01") -> (str, str):
+        self._path_algorithm(start, destination)
+        temp_line_counter = int(destination[2])
+
+        while(not self.is_box() and temp_line_counter < 7):
+            temp_line_counter += 1
+            # go straight for 1 sec
+
+            # go straight to next, until scan through all available boxes
+
+        current_position = destination[0:2] + str(temp_line_counter)
+
+        self._before_pick_box(current_position)
+        colour = self._detect_colour()
+        position_to_go = "G" + colour[0]
+        self._do_pick_box()        # pick the box
+        self._after_pick_box(current_position) # reverse, do the turning
+        self._path_algorithm(current_position, position_to_go)
+        return current_position, position_to_go
+
+    def is_box(self) -> bool:
+        """
+        Check if the robot is currently over a box using color detection.
+        
+        Returns:
+            bool: True if box detected, False otherwise
+        """
+        return False
     
+    def _detect_colour(self) -> str:
+        """
+        Detect the color of the box under the robot using the color sensor.
+
+        Returns:
+            str: The detected color as a string
+        """
+        # Placeholder implementation - replace with actual color detection logic
+        return "R"
+
     def run(self):
         """
         Main control loop for the line follower.
