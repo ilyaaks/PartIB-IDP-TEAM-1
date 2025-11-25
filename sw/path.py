@@ -8,7 +8,7 @@ class Path:
     def _path_G_to_B0(current_position, desired_position):
         # Implement the path logic from G to B0
         if current_position == "G0" and desired_position == "B01":
-            return ["right", "left", "left", "left"], [2,2,8,2] #sequence of turns and number of lines at which to detect it
+            return ["right_forward", "left_forward", "left_forward"], [2,2,1] #sequence of turns and number of lines at which to detect it
         pass
 
     @staticmethod
@@ -29,6 +29,9 @@ class Path:
     @staticmethod
     def _path_B0_to_G(current_position, desired_position):
         # Implement the path logic from B0 to G
+        if current_position == "B01" and desired_position == "G0":
+            #First we need to reverse backwards and reverse:
+            return ["reverse", "right_backward", "straight", "left_backward"], [0,0,0,2] #sequence of turns and number of lines at which to detect it
         pass
 
     @staticmethod

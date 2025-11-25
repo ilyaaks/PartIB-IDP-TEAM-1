@@ -15,9 +15,9 @@ class LineFollowerRobot:
     
     # Configuration constants
     BASE_SPEED = 50
-    SPEED_ADJUSTMENT = 5
+    SPEED_ADJUSTMENT = 10
     MIN_SPEED = 35
-    MAX_SPEED = 65
+    MAX_SPEED = 80
 
     SEARCH_LIST = [
         "B01", "B02", "B03", "B04", "B05", "B06", 
@@ -87,6 +87,9 @@ class LineFollowerRobot:
         self.left_wheel_speed = self.BASE_SPEED
         self.right_wheel_speed = self.BASE_SPEED
         
+        # Direction control
+        self.direction_flag = "forward"  # Global flag: "forward" or "reverse"
+        
         # Sensor state tracking
         self.sensor_left_prev = 0
         self.sensor_right_prev = 0
@@ -112,28 +115,51 @@ class LineFollowerRobot:
         """Configure motor speeds for right turn"""
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
+        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        while (self.signal_mid_right.value()==0):
+            pass
         
     
     def motor_turn_left(self):
         """Configure motor speeds for left turn"""
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
-    
-    def motor_go_straight(self, speed_left, speed_right, direction="forward"):
+        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        sleep(1)
+        while (self.signal_mid_left.value()==0):
+            pass
+    def motor_turn_right_back(self):
+        """Configure motor speeds for right turn"""
+        self.left_wheel_speed = self.MAX_SPEED
+        self.right_wheel_speed = 0
+        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        while (self.signal_mid_left.value()==1):
+            pass
+    def motor_turn_left_back(self):
+        """Configure motor speeds for left turn"""
+        self.left_wheel_speed = 0
+        self.right_wheel_speed = self.MAX_SPEED
+        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        while (self.signal_mid_right.value()==1):
+            pass
+
+    def motor_go_straight(self, speed_left, speed_right,delay = 0):
         """
-        Execute straight movement in specified direction
+        Execute straight movement using the global direction_flag
         
         Args:
             speed_left: Speed for left motor (0-100)
             speed_right: Speed for right motor (0-100)
-            direction: Either 'forward' or 'reverse'
         """
-        if direction == "forward":
+        if self.direction_flag == "forward":
             self.motor_left.Forward(speed_left)
             self.motor_right.Forward(speed_right)
-        elif direction == "reverse":
+        elif self.direction_flag == "reverse":
             self.motor_left.Reverse(speed_left)
             self.motor_right.Reverse(speed_right)
+        if delay > 0:
+            sleep(delay)
+
     
     def motors_off(self):
         """Turn off both motors"""
@@ -174,6 +200,8 @@ class LineFollowerRobot:
         """Disable interrupt handlers for all sensors"""
         self.signal_mid_right.irq(handler=None)
         self.signal_mid_left.irq(handler=None)
+        self.prev_sensor_left = 0
+        self.prev_sensor_right = 0
         # self.signal_far_left.irq(handler=None)
         # self.signal_far_right.irq(handler=None)
 
@@ -198,7 +226,8 @@ class LineFollowerRobot:
         if (current_position.startswith("G") and desired_position.startswith("A1")):
             return Path._path_G_to_A1(current_position, desired_position)
         if (current_position.startswith("B0") and desired_position.startswith("G")):
-            return Path._path_B0_to_G(current_position, desired_position)
+            lines, turns = Path._path_B0_to_G(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
         if (current_position.startswith("B1") and desired_position.startswith("G")):
             return Path._path_B1_to_G(current_position, desired_position)
         if (current_position.startswith("A0") and desired_position.startswith("G")):
@@ -309,10 +338,10 @@ class LineFollowerRobot:
             # Both sensors off line - use previous state for aggressive correction
             if self.sensor_left_prev == 1 and self.sensor_right_prev == 0:
                 # Last seen left on line - turn left aggressively
-                error = 1.5  # Larger error for stronger correction
+                error = 2.5  # Larger error for stronger correction
             elif self.sensor_right_prev == 1 and self.sensor_left_prev == 0:
                 # Last seen right on line - turn right aggressively
-                error = -1.5  # Larger error for stronger correction
+                error = -2.5  # Larger error for stronger correction
             else:
                 # No correction needed - continue current trajectory
                 error = 0
@@ -331,7 +360,7 @@ class LineFollowerRobot:
             self.right_wheel_speed = self.BASE_SPEED
         
         # Apply motor speeds immediately (no delay waiting for main loop)
-        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
+        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
         
         # Update previous sensor states
         self.sensor_left_prev = sensor_mid_left
@@ -350,8 +379,6 @@ class LineFollowerRobot:
         print(f"start: turning_case {case_name} turning")
         self.disable_interrupts()
         turn_function()
-        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
-        sleep(sleep_time)
         self.turning_case = next_case
         self.count_lines = 0
         self.setup_interrupts()
@@ -374,84 +401,98 @@ class LineFollowerRobot:
         Navigate through a sequence of turns based on line counts.
         
         Args:
-            turns: List of turn directions ("right", "left", or "straight")
+            turns: List of turn directions ("right_forward", "left_forward", "right_backward", "left_backward","straight" and "backward")
             lines: List of line counts at which to execute each turn
         """
         current_instruction = 0  # Track which instruction we're on
-        
         while current_instruction < len(lines):
             # Check if we've reached the line count for the current instruction
             if self.count_lines >= lines[current_instruction]:
                 print(f"Lines matched: {lines[current_instruction]} for turn: {turns[current_instruction]}")
                 
-                if turns[current_instruction] == "right":
+                if turns[current_instruction] == "right_forward":
+                    print("==============here=================")
+                    self.direction_flag = "forward"
                     self._execute_turn(self.motor_turn_right, 1.5, current_instruction + 1, str(current_instruction))
-                elif turns[current_instruction] == "left": 
+                elif turns[current_instruction] == "left_forward": 
+                    self.direction_flag = "forward"
                     self._execute_turn(self.motor_turn_left, 1.5, current_instruction + 1, str(current_instruction))
                 elif turns[current_instruction] == "straight":
                     # Continue straight - just increment instruction counter
-                    print(f"Continuing straight past line {lines[current_instruction]}")
+                    self.direction_flag = "forward"
+                    self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+                elif turns[current_instruction] == "right_backward":
+                    self.direction_flag = "reverse"
+                    self._execute_turn(self.motor_turn_right_back, 1.5, current_instruction + 1, str(current_instruction))
+                elif turns[current_instruction] == "left_backward":
+                    self.direction_flag = "reverse"
+                    self._execute_turn(self.motor_turn_left_back, 1.5, current_instruction + 1, str(current_instruction))
+                elif turns[current_instruction] == "reverse":
+                    self.direction_flag = "reverse"
+                    self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
                 
                 # Move to next instruction
                 current_instruction += 1
             
             # Small delay to avoid tight loop
             sleep(0.05)
+        #Now it is at 90 degrees to the box
+        sleep(1)
         
         # All instructions completed
-        print("Navigation sequence complete")
-        current_lines = self.count_lines
-        while True:
-            if self.count_lines > current_lines:
-                self.motors_off()
-                break
+        # print("Navigation sequence complete")
+        # current_lines = self.count_lines
+        # while True:
+        #     if self.count_lines > current_lines:
+        #         self.motors_off()
+        #         break
 
-    def _handle_turning_cases(self):
-        """
-        Process turning logic based on current turning case.
-        Returns True if final case is complete (should exit), False otherwise.
-        """
-        # Calculate distance once and cache it for all conditions
-        # distance = self._calculate_distance()
+    # def _handle_turning_cases(self):
+    #     """
+    #     Process turning logic based on current turning case.
+    #     Returns True if final case is complete (should exit), False otherwise.
+    #     """
+    #     # Calculate distance once and cache it for all conditions
+    #     # distance = self._calculate_distance()
 
-        print("Current turning_case:", self.turning_case, " Lines counted:", self.count_lines)
+    #     print("Current turning_case:", self.turning_case, " Lines counted:", self.count_lines)
 
-        if self.count_lines == 2  and self.turning_case == 0:
-            # if (sensor_far_right == 1):
-            self._execute_turn(self.motor_turn_right, 1, 1, "0")
+    #     if self.count_lines == 2  and self.turning_case == 0:
+    #         # if (sensor_far_right == 1):
+    #         self._execute_turn(self.motor_turn_right, 1, 1, "0")
             
 
-        elif self.count_lines ==2 and self.turning_case == 1:
-            # if (sensor_far_left == 1) :
-            self._execute_turn(self.motor_turn_left, 1, 2, "1")
+    #     elif self.count_lines ==2 and self.turning_case == 1:
+    #         # if (sensor_far_left == 1) :
+    #         self._execute_turn(self.motor_turn_left, 1, 2, "1")
             
             
-        elif self.count_lines == 8 and self.turning_case == 2:
-            # if (sensor_far_left == 1) :
-            self._execute_turn(self.motor_turn_left, 1, 3, "2")
+    #     elif self.count_lines == 8 and self.turning_case == 2:
+    #         # if (sensor_far_left == 1) :
+    #         self._execute_turn(self.motor_turn_left, 1, 3, "2")
             
             
-        elif self.count_lines == 2 and self.turning_case == 3:
-            # if (sensor_far_left == 1) :
-            self._execute_turn(self.motor_turn_left, 1, 4, "3")
+    #     elif self.count_lines == 2 and self.turning_case == 3:
+    #         # if (sensor_far_left == 1) :
+    #         self._execute_turn(self.motor_turn_left, 1, 4, "3")
             
             
-        elif self.count_lines == 8 and self.turning_case == 4:
-            # if (sensor_far_left == 1) :
-            self._execute_turn(self.motor_turn_left, 1.5, 5, "4")
+    #     elif self.count_lines == 8 and self.turning_case == 4:
+    #         # if (sensor_far_left == 1) :
+    #         self._execute_turn(self.motor_turn_left, 1.5, 5, "4")
             
             
-        elif self.count_lines == 2 and self.turning_case == 5:
-            # Final approach sequence
-            self.motor_turn_right()
-            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
-            sleep(1.5)
-            self.motor_go_straight(70, 70, direction="forward")
-            sleep(1.5)
-            self.motors_off()
-            return True  # Signal to exit main loop
+    #     elif self.count_lines == 2 and self.turning_case == 5:
+    #         # Final approach sequence
+    #         self.motor_turn_right()
+    #         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
+    #         sleep(1.5)
+    #         self.motor_go_straight(70, 70, direction="forward")
+    #         sleep(1.5)
+    #         self.motors_off()
+    #         return True  # Signal to exit main loop
         
-        return False  # Continue running
+    #     return False  # Continue running
 
     # Color detection disabled - not connected yet
     # class BASE_COLOUR(Enum):
@@ -500,16 +541,17 @@ class LineFollowerRobot:
         print("Start line follower")
         
         # Start moving forward
-        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
-        self._path_algorithm("G0", "B01")
-        while self.is_running:
-            # Handle turning cases - exit if final case is complete
-            if self._handle_turning_cases():
-                self.is_running = False
-                self.destroy()  # Clean up when finished
-                break
-            # Longer sleep since interrupts handle line following immediately
-            sleep(0.05)  # Reduced from 100Hz to 20Hz polling
+        # self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        # self._path_algorithm("G0", "B01")
+        self._path_algorithm("B01", "G0")
+        # while self.is_running:
+        #     # Handle turning cases - exit if final case is complete
+        #     if self._handle_turning_cases():
+        #         self.is_running = False
+        #         self.destroy()  # Clean up when finished
+        #         break
+        #     # Longer sleep since interrupts handle line following immediately
+        #     sleep(0.05)  # Reduced from 100Hz to 20Hz polling
 
         print("Robot stopped. Press button to restart...")
 
