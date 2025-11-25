@@ -2,6 +2,7 @@ from machine import Pin, I2C
 from utime import sleep, ticks_ms, ticks_diff
 from sw.test_motor import Motor
 from sw.path import Path
+from sw.test_linear_actuator import LinearActuator
 # from sw.libs.VL53L0X.VL53L0X import VL53L0X
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 # from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
@@ -80,6 +81,7 @@ class LineFollowerRobot:
         """Initialize motor controllers"""
         self.motor_left = Motor(dirPin=7, PWMPin=6)   # Motor left is controlled from Motor Driv2 #2
         self.motor_right = Motor(dirPin=4, PWMPin=5)  # Motor right is controlled from Motor Driv2 #3
+        self.linear_actuator = LinearActuator(dirPin=0, PWMPin=1)  
 
     def _init_state(self):
         """Initialize all state variables"""
@@ -116,6 +118,7 @@ class LineFollowerRobot:
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        sleep(0.5)
         while (self.signal_mid_right.value()==0):
             pass
         
@@ -125,6 +128,7 @@ class LineFollowerRobot:
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        sleep(0.5)
         while (self.signal_mid_left.value()==0):
             pass
     def motor_turn_right_back(self):
@@ -132,6 +136,7 @@ class LineFollowerRobot:
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        sleep(0.5)
         while (self.signal_far_right.value()==0):
             pass
     def motor_turn_left_back(self):
@@ -139,6 +144,7 @@ class LineFollowerRobot:
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        sleep(0.5)
         while (self.signal_far_left.value()==0):
             pass
 
@@ -218,22 +224,40 @@ class LineFollowerRobot:
         if (current_position.startswith("G") and desired_position.startswith("B0")):
             lines, turns = Path._path_G_to_B0(current_position, desired_position)
             self._handle_identifying_cases(lines, turns)
+
+
         if (current_position.startswith("G") and desired_position.startswith("B1")):
-            return Path._path_G_to_B1(current_position, desired_position)
+            lines, turns = Path._path_G_to_B1(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
+
+
         if (current_position.startswith("G") and desired_position.startswith("A0")):
-            return Path._path_G_to_A0(current_position, desired_position)
+            lines, turns = Path._path_G_to_A0(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
+
+
         if (current_position.startswith("G") and desired_position.startswith("A1")):
-            return Path._path_G_to_A1(current_position, desired_position)
+            lines, turns = Path._path_G_to_A1(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
+
+
         if (current_position.startswith("B0") and desired_position.startswith("G")):
             lines, turns = Path._path_B0_to_G(current_position, desired_position)
             self._handle_identifying_cases(lines, turns)
-        if (current_position.startswith("B1") and desired_position.startswith("G")):
-            return Path._path_B1_to_G(current_position, desired_position)
-        if (current_position.startswith("A0") and desired_position.startswith("G")):
-            return Path._path_A0_to_G(current_position, desired_position)
-        if (current_position.startswith("A1") and desired_position.startswith("G")):
-            return Path._path_A1_to_G(current_position, desired_position)
 
+
+        if (current_position.startswith("B1") and desired_position.startswith("G")):
+            lines, turns = Path._path_B1_to_G(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
+
+
+        if (current_position.startswith("A0") and desired_position.startswith("G")):
+            lines, turns = Path._path_A0_to_G(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
+
+        if (current_position.startswith("A1") and desired_position.startswith("G")):
+            lines, turns = Path._path_A1_to_G(current_position, desired_position)
+            self._handle_identifying_cases(lines, turns)
 
         # do NOT disable interrupt for button
 
@@ -365,7 +389,7 @@ class LineFollowerRobot:
         self.sensor_left_prev = sensor_mid_left
         self.sensor_right_prev = sensor_mid_right
     
-    def _execute_turn(self, turn_function, sleep_time, next_case, case_name):
+    def _execute_turn(self, turn_function, sleep_time, case_name):
         """
         Helper method to execute a turn and update state
         
@@ -378,10 +402,8 @@ class LineFollowerRobot:
         print(f"start: turning_case {case_name} turning")
         self.disable_interrupts()
         turn_function()
-        self.turning_case = next_case
         self.count_lines = 0
         self.setup_interrupts()
-        print(f"end: turning_case {case_name} turning")
 
     # def _calculate_distance(self) -> int:
     #     """
@@ -420,15 +442,17 @@ class LineFollowerRobot:
                     # Continue straight - just increment instruction counter
                     self.direction_flag = "forward"
                     self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-                elif turns[current_instruction] == "right_backward":
-                    self.direction_flag = "reverse"
-                    self._execute_turn(self.motor_turn_right_back, 1.5, current_instruction + 1, str(current_instruction))
-                elif turns[current_instruction] == "left_backward":
-                    self.direction_flag = "reverse"
-                    self._execute_turn(self.motor_turn_left_back, 1.5, current_instruction + 1, str(current_instruction))
-                elif turns[current_instruction] == "reverse":
-                    self.direction_flag = "reverse"
-                    self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay = 1)
+                elif turns[current_instruction] == "stop":
+                    self.motors_off()
+                # elif turns[current_instruction] == "right_backward":
+                #     self.direction_flag = "reverse"
+                #     self._execute_turn(self.motor_turn_right_back, 1.5, current_instruction + 1, str(current_instruction))
+                # elif turns[current_instruction] == "left_backward":
+                #     self.direction_flag = "reverse"
+                #     self._execute_turn(self.motor_turn_left_back, 1.5, current_instruction + 1, str(current_instruction))
+                # elif turns[current_instruction] == "reverse":
+                #     self.direction_flag = "reverse"
+                #     self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay = 1)
             
                 # Move to next instruction
                 current_instruction += 1
@@ -436,10 +460,9 @@ class LineFollowerRobot:
             # Small delay to avoid tight loop
             sleep(0.05)
         #Now it is at 90 degrees to the box
-        sleep(1)
         
         # All instructions completed
-        # print("Navigation sequence complete")
+        print("Navigation sequence complete")
         # current_lines = self.count_lines
         # while True:
         #     if self.count_lines > current_lines:
@@ -556,27 +579,30 @@ class LineFollowerRobot:
             bool: True if box detected, False otherwise
         """
         return False
+
     def _before_pick_box(self, current_position: str):
-        if current_position[0:2] == "B0":
+        """Here we want to help turn and then it will automatically readjust itself
+        """
+        if current_position[0:1] == "B0":
             self._execute_turn(self.motor_turn_left, 1.5, 0, "before_pick_box")
             if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
                 self.motor_off()
-        elif current_position[0:2] == "A0":
+        elif current_position[0:1] == "A0":
+            self._execute_turn(self.motor_turn_right, 1.5, 0, f"before_pick_box from A0 {current_position[2]}")
+            if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
+                self.motor_off()
+        elif current_position[0:1] == "B1":
             self._execute_turn(self.motor_turn_right, 1.5, 0, "before_pick_box")
             if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
                 self.motor_off()
-        elif current_position[0:2] == "B1":
-            self._execute_turn(self.motor_turn_right, 1.5, 0, "before_pick_box")
-            if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
-                self.motor_off()
-        elif current_position[0:2] == "A1":
+        elif current_position[0:1] == "A1":
             self._execute_turn(self.motor_turn_left, 1.5, 0, "before_pick_box")
             if (self.signal_mid_left.value()==0 and self.signal_mid_right.value() == 0):
                 self.motor_off()
         
     def after_pick_box(self, current_position):
         """ First we want to reverse out and then go to the ground position"""
-        if current_position[0:2] == "B0" or current_position[0:2] == "A1":
+        if current_position[0:1] == "B0" or current_position[0:1] == "A1":
             self.direction_flag = "reverse"
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay = 1)
             self._execute_turn(self.motor_turn_right_back, 1.5, 0, "after_pick_box")
@@ -584,7 +610,7 @@ class LineFollowerRobot:
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
             while (self.signal_far_right.value()==1):
                 pass
-        elif current_position[0:2] == "B1" or current_position[0:2] == "A0":
+        elif current_position[0:1] == "B1" or current_position[0:1] == "A0":
             self.direction_flag = "reverse"
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay = 1)
             self._execute_turn(self.motor_turn_left_back, 1.5, 0, "after_pick_box")
@@ -592,6 +618,16 @@ class LineFollowerRobot:
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
             while (self.signal_far_left.value()==1):
                 pass
+    def _do_pick_box(self):
+        self.linear_actuator.set("extend", 90)
+        sleep(2)
+        self.motor_go_straight(50,50,delay = 1, "forward")
+        sleep(1)
+        self.motors_off()
+        self.linear_actuator.set("retract", 90)
+        sleep(2)
+        self.motor_go_straight(50,50,delay = 1, "reverse")
+        self.motors_off()
 
     def _detect_colour(self) -> str:
         """
@@ -617,7 +653,8 @@ class LineFollowerRobot:
         # Start moving forward
         # self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
         # self._path_algorithm("G0", "B01")
-        self._path_algorithm("B01", "G0")
+        self._pick_box("G0", "B01")
+        
         # while self.is_running:
         #     # Handle turning cases - exit if final case is complete
         #     if self._handle_turning_cases():
@@ -646,7 +683,6 @@ if __name__ == "__main__":
     finally:
         # Always clean up resources
         robot.destroy()
-
 
 
 

@@ -9,7 +9,10 @@ class Actuator:
         self.pwm.duty_u16(0)  # set duty cycle - 0=off
            
     def set(self, dir, speed):
-        self.mDir.value(dir)                     # forward = 0 reverse = 1 motor
+        if dir == "extend":
+            self.mDir.value(0)                     # forward = 0 reverse = 1 motor
+        elif dir == "retract":
+            self.mDir.value(1)       
         self.pwm.duty_u16(int(65535 * speed / 100))  # speed range 0-100 motor
     def off(self):
         self.pwm.duty_u16(0)
