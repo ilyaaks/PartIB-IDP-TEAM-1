@@ -19,16 +19,16 @@ class Actuator:
 
 def test_actuator1():
     actuator1 = Actuator(dirPin=0, PWMPin=1)  # Actuator 1 controlled from Motor Driv1 #1, which is on GP0/1
-
-    while True:
-        print("Extending quickly")
-        actuator1.set(dir = 0, speed=100)
-        sleep(5)  # nb we don't know when this has finished without another means
-
-        print("Retracing slowly")
-        actuator1.set(dir=1, speed=25)
-        sleep(10)  # nb we don't know when this has finished without another means
-
-
+    print("Testing Actuator 1")
+    actuator1.set(dir ="retract", speed = 50)  # extend at 50% speed
+    sleep(1.5)  # Give actuator time to retract (adjust time as needed)
+    actuator1.off()
+    print("Actuator test complete")
+    
 if __name__ == "__main__":
-    test_actuator1()
+    actuator1 = Actuator(dirPin=0, PWMPin=1)
+    try:
+        test_actuator1()
+    except KeyboardInterrupt:
+        actuator1.off()
+        print("Test interrupted by user")

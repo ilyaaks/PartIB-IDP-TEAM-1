@@ -24,7 +24,7 @@ class ColourSensorTest():
 
     def get_rgb_value(self) -> (int, int, int):
         # create an output pin at 18 
-        transistor = Pin(18, Pin.OUT)
+        transistor = Pin(16, Pin.OUT)
         transistor.value(0) # ON
 
         '''
@@ -84,6 +84,8 @@ class ColourSensorTest():
         return closest_color
 
 if __name__ == "__main__":
+    # pin = Pin(16, Pin.OUT)
+    # Pin(16, Pin.OUT).value(0)  
     robot = ColourSensorTest()
     while True:
         rgb = robot.get_rgb_value()

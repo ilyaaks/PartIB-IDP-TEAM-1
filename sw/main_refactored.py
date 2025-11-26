@@ -469,53 +469,7 @@ class LineFollowerRobot:
         #         self.motors_off()
         #         break
 
-    # def _handle_turning_cases(self):
-    #     """
-    #     Process turning logic based on current turning case.
-    #     Returns True if final case is complete (should exit), False otherwise.
-    #     """
-    #     # Calculate distance once and cache it for all conditions
-    #     # distance = self._calculate_distance()
-
-    #     print("Current turning_case:", self.turning_case, " Lines counted:", self.count_lines)
-
-    #     if self.count_lines == 2  and self.turning_case == 0:
-    #         # if (sensor_far_right == 1):
-    #         self._execute_turn(self.motor_turn_right, 1, 1, "0")
-            
-
-    #     elif self.count_lines ==2 and self.turning_case == 1:
-    #         # if (sensor_far_left == 1) :
-    #         self._execute_turn(self.motor_turn_left, 1, 2, "1")
-            
-            
-    #     elif self.count_lines == 8 and self.turning_case == 2:
-    #         # if (sensor_far_left == 1) :
-    #         self._execute_turn(self.motor_turn_left, 1, 3, "2")
-            
-            
-    #     elif self.count_lines == 2 and self.turning_case == 3:
-    #         # if (sensor_far_left == 1) :
-    #         self._execute_turn(self.motor_turn_left, 1, 4, "3")
-            
-            
-    #     elif self.count_lines == 8 and self.turning_case == 4:
-    #         # if (sensor_far_left == 1) :
-    #         self._execute_turn(self.motor_turn_left, 1.5, 5, "4")
-            
-            
-    #     elif self.count_lines == 2 and self.turning_case == 5:
-    #         # Final approach sequence
-    #         self.motor_turn_right()
-    #         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
-    #         sleep(1.5)
-    #         self.motor_go_straight(70, 70, direction="forward")
-    #         sleep(1.5)
-    #         self.motors_off()
-    #         return True  # Signal to exit main loop
-        
-    #     return False  # Continue running
-
+   
     # Color detection disabled - not connected yet
     # class BASE_COLOUR(Enum):
     #     RED = (140, 60, 60)
@@ -621,12 +575,13 @@ class LineFollowerRobot:
     def _do_pick_box(self):
         self.linear_actuator.set("extend", 90)
         sleep(2)
-        self.motor_go_straight(50,50,delay = 1, "forward")
-        sleep(1)
+        self.direction_flag = "forward"
+        self.motor_go_straight(50,50,delay = 1,)
         self.motors_off()
         self.linear_actuator.set("retract", 90)
         sleep(2)
-        self.motor_go_straight(50,50,delay = 1, "reverse")
+        self.direction_flag = "reverse"
+        self.motor_go_straight(50,50,delay = 1)
         self.motors_off()
 
     def _detect_colour(self) -> str:
