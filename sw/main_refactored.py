@@ -35,7 +35,7 @@ class LineFollowerRobot:
     MID_LEFT_PIN = 27
     FAR_RIGHT_PIN = 28
     FAR_LEFT_PIN = 22
-
+    YELLOW_LED = 14
     SDA_PIN = 20
     SCL_PIN = 21
 
@@ -60,7 +60,8 @@ class LineFollowerRobot:
         self.signal_mid_left = Pin(self.MID_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
         self.signal_far_right = Pin(self.FAR_RIGHT_PIN, Pin.IN, Pin.PULL_DOWN)
         self.signal_far_left = Pin(self.FAR_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
-        
+        self.yellow_led = Pin(self.YELLOW_LED, Pin.OUT)
+        self.yellow_led.value(1)
         # config I2C Bus
         # i2c_bus_vl5310 = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
         
@@ -604,7 +605,8 @@ class LineFollowerRobot:
         #     sleep(0.1)
 
         print("Start line follower")
-        
+        #Start the flashing LED to indicate running
+        self.yellow_led.value(0)
         # Start moving forward
         # self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
         # self._path_algorithm("G0", "B01")
