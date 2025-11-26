@@ -2,7 +2,7 @@ from machine import Pin, I2C
 from utime import sleep, ticks_ms, ticks_diff
 from sw.test_motor import Motor
 from sw.path import Path
-from sw.test_linear_actuator import LinearActuator
+from sw.test_linear_actuator import Actuator
 # from sw.libs.VL53L0X.VL53L0X import VL53L0X
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 # from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
@@ -23,7 +23,7 @@ class LineFollowerRobot:
     SEARCH_LIST = [
         "B01", "B02", "B03", "B04", "B05", "B06", 
         "B16", "B15", "B14", "B13", "B12", "B11", 
-        "A16", "A15", "A14", "A13", "A12", "A11",
+        "A11", "A12", "A13", "A14", "A15", "A16",
         "A06", "A05", "A04", "A03", "A02", "A01"
     ]
     
@@ -39,7 +39,7 @@ class LineFollowerRobot:
     SDA_PIN = 20
     SCL_PIN = 21
 
-    # BUTTON_PIN = 9999
+    # BUTTON_PIN = 17
     # DEBOUNCE_MS = 200
     
     def __init__(self):
@@ -70,7 +70,7 @@ class LineFollowerRobot:
         # self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
 
         # Setup digital button
-        # self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_UP)  # Not connected yet
+        # self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_DOWN)
 
         # Setup colour sensor (not connected yet)
         # i2c_bus_tcs = I2C(id=0, sda=Pin(8), scl=Pin(9), freq=400000)  # I2C0 on GP8 & GP9
@@ -81,7 +81,7 @@ class LineFollowerRobot:
         """Initialize motor controllers"""
         self.motor_left = Motor(dirPin=7, PWMPin=6)   # Motor left is controlled from Motor Driv2 #2
         self.motor_right = Motor(dirPin=4, PWMPin=5)  # Motor right is controlled from Motor Driv2 #3
-        self.linear_actuator = LinearActuator(dirPin=0, PWMPin=1)  
+        self.linear_actuator = Actuator(dirPin=0, PWMPin=1)  
 
     def _init_state(self):
         """Initialize all state variables"""
@@ -110,11 +110,15 @@ class LineFollowerRobot:
             5  6,1  2
         '''
         self.turning_case = 0
-        self.is_running = True  # Start immediately since button not connected
+        self.is_running = True  # Start immediately since button is not connected
         # self.last_button_time = 0
     
     def motor_turn_right(self):
         """Configure motor speeds for right turn"""
+
+        while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
+            pass
+
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
@@ -125,6 +129,8 @@ class LineFollowerRobot:
     
     def motor_turn_left(self):
         """Configure motor speeds for left turn"""
+        while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
+            pass
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
@@ -148,13 +154,14 @@ class LineFollowerRobot:
         while (self.signal_far_left.value()==0):
             pass
 
-    def motor_go_straight(self, speed_left, speed_right,delay = 0):
+    def motor_go_straight(self, speed_left, speed_right, delay=0):
         """
         Execute straight movement using the global direction_flag
         
         Args:
             speed_left: Speed for left motor (0-100)
             speed_right: Speed for right motor (0-100)
+            delay: Optional delay in seconds after moving
         """
         if self.direction_flag == "forward":
             self.motor_left.Forward(speed_left)
@@ -198,7 +205,7 @@ class LineFollowerRobot:
         self.signal_far_left.irq(handler=count_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
         self.signal_far_right.irq(handler=count_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
     
-        # Enable interrupts for button (not connected yet)
+        # Enable interrupts for button
         # self.button.irq(handler=self.button_handler, trigger=Pin.IRQ_FALLING) 
 
     def disable_interrupts(self):
@@ -215,7 +222,7 @@ class LineFollowerRobot:
         Args:  "GB", "GG", "G0", "GY", "GR"
         "B01", "B02", "B03", "B04", "B05", "B06", 
         "B16", "B15", "B14", "B13", "B12", "B11", 
-        "A16", "A15", "A14", "A13", "A12", "A11",
+        "A11", "A12", "A13", "A14", "A15", "A16",
         "A06", "A05", "A04", "A03", "A02", "A01"
 
         return a list of commands to go from current to desired position
@@ -270,6 +277,8 @@ class LineFollowerRobot:
     #         p: Pin that triggered the interrupt
     #     """
     #     current_time = ticks_ms()
+
+    #     print("================= Button pressed ==================")
         
     #     # Debounce: ignore if button pressed too soon after last press
     #     if ticks_diff(current_time, self.last_button_time) < self.DEBOUNCE_MS:
@@ -290,7 +299,6 @@ class LineFollowerRobot:
     #         # Reset state for fresh start
     #         self.count_lines = 0
     #         self.turning_case = 0
-    #         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, direction="forward")
 
     def line_counter(self, p):
         """
@@ -313,7 +321,6 @@ class LineFollowerRobot:
         if (sensor_far_left == 1 or sensor_far_right == 1) and not self.on_perpendicular_line:
             # Rising edge detected - count the line
             self.count_lines += 1
-            print("========================here========================")
             self.on_perpendicular_line = True
             print("Lines detected:", self.count_lines)
         
@@ -338,8 +345,6 @@ class LineFollowerRobot:
         # Read current sensor values (only mid sensors needed for line following)
         sensor_mid_left = self.signal_mid_left.value()
         sensor_mid_right = self.signal_mid_right.value()
-
-        print("mid left: ", sensor_mid_left, " mid right: ", sensor_mid_right)
         
         # Proportional control for line following
         # Calculate error: -1 (left of line), 0 (on line), +1 (right of line)
@@ -434,10 +439,10 @@ class LineFollowerRobot:
                 if turns[current_instruction] == "right_forward":
                     print("==============here=================")
                     self.direction_flag = "forward"
-                    self._execute_turn(self.motor_turn_right, 1.5, current_instruction + 1, str(current_instruction))
+                    self._execute_turn(self.motor_turn_right, 1.5, str(current_instruction))
                 elif turns[current_instruction] == "left_forward": 
                     self.direction_flag = "forward"
-                    self._execute_turn(self.motor_turn_left, 1.5, current_instruction + 1, str(current_instruction))
+                    self._execute_turn(self.motor_turn_left, 1.5, str(current_instruction))
                 elif turns[current_instruction] == "straight":
                     # Continue straight - just increment instruction counter
                     self.direction_flag = "forward"
@@ -504,19 +509,52 @@ class LineFollowerRobot:
     #             closest_color = color
 
     #     return closest_color
+
+    def _go_to_next_bay(self, current_bay: str):
+        """
+        Move the robot to the next bay in the search list.
+        
+        Args:
+            current_bay: Current bay position as a string (e.g., "B01")
+        """
+        if (current_bay == "B0"):
+            self._path_algorithm("B06", "B16") # TODO
+            return "B1"
+        elif (current_bay == "B1"):
+            self._path_algorithm("B11", "A11") # TODO
+            return "A1"
+        elif (current_bay == "A1"):
+            self._path_algorithm("A16", "A06") # TODO
+            return "A0"
+        elif (current_bay == "A0"):
+            self._path_algorithm("A01", "G0") # TODO
+            # stop motors
+            self.motors_off()
+            return "G"
+        
+
     def pick_box(self, start = "G0", destination = "B01") -> (str, str):
         self._path_algorithm(start, destination)
         temp_line_counter = int(destination[2])
 
-        while(not self.is_box() and temp_line_counter < 7):
+        current_bay = destination[0:2]
+
+        while(not self.is_box()):
             temp_line_counter += 1
-            # go straight for 1 sec
+            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+            sleep(1) # TODO: test time to go to next line
+            
+            if (temp_line_counter > 6):
+                current_bay = self._go_to_next_bay(current_bay)
+                temp_line_counter = 1
+            if (current_bay == "G"):
+                print("Task finished")
+                self.motors_off()
+                return "G0", "G0" # Finished all bays
 
-            # go straight to next, until scan through all available boxes
+        current_position = current_bay + str(temp_line_counter)
 
-        current_position = destination[0:2] + str(temp_line_counter)
-
-        self._before_pick_box(destination)
+        self._before_pick_box(current_position)
         colour = self._detect_colour()
         position_to_go = "G" + colour[0]
         self._do_pick_box()        # pick the box
@@ -572,16 +610,18 @@ class LineFollowerRobot:
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
             while (self.signal_far_left.value()==1):
                 pass
+
     def _do_pick_box(self):
         self.linear_actuator.set("extend", 90)
         sleep(2)
         self.direction_flag = "forward"
-        self.motor_go_straight(50,50,delay = 1,)
+        self.motor_go_straight(50, 50, delay=1)
+        sleep(1)
         self.motors_off()
         self.linear_actuator.set("retract", 90)
         sleep(2)
         self.direction_flag = "reverse"
-        self.motor_go_straight(50,50,delay = 1)
+        self.motor_go_straight(50, 50, delay=1)
         self.motors_off()
 
     def _detect_colour(self) -> str:
@@ -606,9 +646,10 @@ class LineFollowerRobot:
         print("Start line follower")
         
         # Start moving forward
-        # self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        # self._path_algorithm("G0", "B01")
-        self._pick_box("G0", "B01")
+        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+    
+        self._path_algorithm("G0", "A01")
+        # self.pick_box("G0", "B01")
         
         # while self.is_running:
         #     # Handle turning cases - exit if final case is complete
@@ -619,7 +660,7 @@ class LineFollowerRobot:
         #     # Longer sleep since interrupts handle line following immediately
         #     sleep(0.05)  # Reduced from 100Hz to 20Hz polling
 
-        print("Robot stopped. Press button to restart...")
+        print("Robot stopped.")
 
 
 if __name__ == "__main__":
