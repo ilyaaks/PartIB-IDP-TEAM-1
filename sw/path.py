@@ -18,7 +18,7 @@ class Path:
     @staticmethod
     def _path_G_to_A0(current_position, desired_position):
         # Implement the path logic from G to A0
-        return ["straight", "left_forward", "right_forward", "stop"], [0, 2, 2, int(desired_position[2]), 0] #sequence of turns and number of lines at which to detect it
+        return ["straight", "left_forward","right_forward", "stop"], [0, 2, 2, int(desired_position[2])+1] #sequence of turns and number of lines at which to detect it
 
     @staticmethod
     def _path_G_to_A1(current_position, desired_position):
@@ -40,7 +40,7 @@ class Path:
     @staticmethod
     def _path_A0_to_G(current_position, desired_position):
         # Implement the path logic from A0 to G
-        return ["straight", "left_straight", "right_straight", "stop"], [0, int(current_position[2]), 0, 2, 0] #sequence of turns and number of lines at which to detect it
+        return ["straight", "left_straight", "right_straight", "stop"], [0, int(current_position[2]), 2, 2, 0] #sequence of turns and number of lines at which to detect it
 
     @staticmethod
     def _path_A1_to_G(current_position, desired_position):
