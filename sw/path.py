@@ -7,7 +7,7 @@ class Path:
     @staticmethod
     def _path_G_to_B0(current_position, desired_position):
         # Implement the path logic from G to B01
-        return ["straight", "right_forward", "left_forward", "stop"], [0, 2, 2, int(desired_position[2]), 0] #sequence of turns and number of lines at which to detect it
+        return ["straight", "right_forward", "left_forward", "stop"], [0, 2, 2, int(desired_position[2])] #sequence of turns and number of lines at which to detect it
 
     @staticmethod
     def _path_G_to_B1(current_position, desired_position):

@@ -3,7 +3,8 @@ from utime import sleep, ticks_ms, ticks_diff
 from sw.test_motor import Motor
 from sw.path import Path
 from sw.test_linear_actuator import Actuator
-# from sw.libs.VL53L0X.VL53L0X import VL53L0X
+from sw.libs.VL53L0X.VL53L0X import VL53L0X
+from sw.libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701 #Second distance sensor
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 # from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
 
@@ -35,12 +36,15 @@ class LineFollowerRobot:
     MID_LEFT_PIN = 27
     FAR_RIGHT_PIN = 28
     FAR_LEFT_PIN = 22
-    YELLOW_LED = 14
     SDA_PIN = 20
     SCL_PIN = 21
+    YELLOW_LED = 14
 
-    # BUTTON_PIN = 17
-    # DEBOUNCE_MS = 200
+    TMF8X01_SDA_PIN = 18
+    TMF8X01_SCL_PIN = 19
+
+    BUTTON_PIN = 17
+    DEBOUNCE_MS = 200
     
     def __init__(self):
         """Initialize robot hardware and state"""
@@ -52,7 +56,8 @@ class LineFollowerRobot:
         self._init_state()
         
         # Start distance sensor
-        # self.vl53l0.start()
+        self.vl53l0.start()
+        self.tof.begin()
     
     def _init_sensors(self):
         """Initialize all sensor pins"""
@@ -62,16 +67,24 @@ class LineFollowerRobot:
         self.signal_far_left = Pin(self.FAR_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
         self.yellow_led = Pin(self.YELLOW_LED, Pin.OUT)
         self.yellow_led.value(1)
-        # config I2C Bus
-        # i2c_bus_vl5310 = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
         
-        # # Setup vl53l0 object
-        # self.vl53l0 = VL53L0X(i2c_bus_vl5310)
-        # self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
-        # self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
+        # config I2C Bus
+        i2c_bus_vl5310 = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
+        i2c_bus_tmf8x01 = I2C(1, sda=Pin(self.TMF8X01_SDA_PIN), scl=Pin(self.TMF8X01_SCL_PIN), freq=100000)  # I2C1 on GP2 & GP3
+        
+        # Setup vl53l0 object
+        self.vl53l0 = VL53L0X(i2c_bus_vl5310)
+        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
+        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
+        
+        # Setup TMF8x01 object
+        try:
+            self.tof = DFRobot_TMF8701(i2c_bus=i2c_bus_tmf8x01)
+        except: 
+            raise Exception("TMF8x01 not connected properly")
 
         # Setup digital button
-        # self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_DOWN)
+        self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_DOWN)
 
         # Setup colour sensor (not connected yet)
         # i2c_bus_tcs = I2C(id=0, sda=Pin(8), scl=Pin(9), freq=400000)  # I2C0 on GP8 & GP9
@@ -87,7 +100,7 @@ class LineFollowerRobot:
     def _init_state(self):
         """Initialize all state variables"""
         # Motor speeds
-        self.left_wheel_speed = self.BASE_SPEED
+        self.left_wheel_speed = self.BASE_SPEED+5
         self.right_wheel_speed = self.BASE_SPEED
         
         # Direction control
@@ -111,37 +124,38 @@ class LineFollowerRobot:
             5  6,1  2
         '''
         self.turning_case = 0
-        self.is_running = True  # Start immediately since button is not connected
-        # self.last_button_time = 0
+        self.is_running = False  # Wait for button press to start
+        self.last_button_time = 0
     
     def motor_turn_right(self):
         """Configure motor speeds for right turn"""
 
-        while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
-            pass
+        # while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
+        #     pass
 
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(0.5)
-        while (self.signal_mid_right.value()==0):
-            pass
+        sleep(1.2)
+        # while (self.signal_mid_right.value()==0):
+        #     pass
         
     
     def motor_turn_left(self):
         """Configure motor speeds for left turn"""
-        while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
-            pass
+        # while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
+        #     pass
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(0.5)
-        while (self.signal_mid_left.value()==0):
-            pass
+        sleep(1.2)
+        # while (self.signal_mid_left.value()==0):
+        #     pass
     def motor_turn_right_back(self):
         """Configure motor speeds for right turn"""
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
+        self.direction_flag = "reverse"
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
         sleep(0.5)
         while (self.signal_far_right.value()==0):
@@ -150,6 +164,7 @@ class LineFollowerRobot:
         """Configure motor speeds for left turn"""
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
+        self.direction_flag = "reverse"
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
         sleep(0.5)
         while (self.signal_far_left.value()==0):
@@ -207,7 +222,7 @@ class LineFollowerRobot:
         self.signal_far_right.irq(handler=count_handler, trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING)
     
         # Enable interrupts for button
-        # self.button.irq(handler=self.button_handler, trigger=Pin.IRQ_FALLING) 
+        self.button.irq(handler=self.button_handler, trigger=Pin.IRQ_FALLING) 
 
     def disable_interrupts(self):
         """Disable interrupt handlers for all sensors"""
@@ -230,76 +245,75 @@ class LineFollowerRobot:
         '''
 
         if (current_position.startswith("G") and desired_position.startswith("B0")):
-            lines, turns = Path._path_G_to_B0(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
+            turns, lines = Path._path_G_to_B0(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
 
 
         if (current_position.startswith("G") and desired_position.startswith("B1")):
-            lines, turns = Path._path_G_to_B1(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
+            turns, lines = Path._path_G_to_B1(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
 
 
         if (current_position.startswith("G") and desired_position.startswith("A0")):
-            lines, turns = Path._path_G_to_A0(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
+            turns, lines = Path._path_G_to_A0(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
 
 
         if (current_position.startswith("G") and desired_position.startswith("A1")):
-            lines, turns = Path._path_G_to_A1(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
+            turns, lines = Path._path_G_to_A1(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
 
 
         if (current_position.startswith("B0") and desired_position.startswith("G")):
-            lines, turns = Path._path_B0_to_G(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
+            turns, lines = Path._path_B0_to_G(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
 
 
         if (current_position.startswith("B1") and desired_position.startswith("G")):
-            lines, turns = Path._path_B1_to_G(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
+            turns, lines = Path._path_B1_to_G(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
 
 
         if (current_position.startswith("A0") and desired_position.startswith("G")):
-            lines, turns = Path._path_A0_to_G(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
+            turns, lines = Path._path_A0_to_G(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
 
         if (current_position.startswith("A1") and desired_position.startswith("G")):
-            lines, turns = Path._path_A1_to_G(current_position, desired_position)
-            self._handle_identifying_cases(lines, turns)
-
+            turns, lines = Path._path_A1_to_G(current_position, desired_position)
+            self._handle_identifying_cases(turns, lines)
         # do NOT disable interrupt for button
 
-    # def button_handler(self, p):
-    #     """
-    #     Interrupt handler for button press.
-    #     Toggles robot state between running and stopped.
+    def button_handler(self, p):
+        """
+        Interrupt handler for button press.
+        Toggles robot state between running and stopped.
 
-    #     Args:
-    #         p: Pin that triggered the interrupt
-    #     """
-    #     current_time = ticks_ms()
+        Args:
+            p: Pin that triggered the interrupt
+        """
+        current_time = ticks_ms()
 
-    #     print("================= Button pressed ==================")
+        print("================= Button pressed ==================")
         
-    #     # Debounce: ignore if button pressed too soon after last press
-    #     if ticks_diff(current_time, self.last_button_time) < self.DEBOUNCE_MS:
-    #         return
+        # Debounce: ignore if button pressed too soon after last press
+        if ticks_diff(current_time, self.last_button_time) < self.DEBOUNCE_MS:
+            return
         
-    #     self.last_button_time = current_time
+        self.last_button_time = current_time
         
-    #     # Toggle running state
-    #     if self.is_running:
-    #         # Stop the robot
-    #         print("Button pressed - Stopping robot")
-    #         self.is_running = False
-    #         self.destroy()
-    #     else:
-    #         # Start the robot
-    #         print("Button pressed - Starting robot")
-    #         self.is_running = True
-    #         # Reset state for fresh start
-    #         self.count_lines = 0
-    #         self.turning_case = 0
+        # Toggle running state
+        if self.is_running:
+            # Stop the robot
+            print("Button pressed - Stopping robot")
+            self.is_running = False
+            self.destroy()
+        else:
+            # Start the robot
+            print("Button pressed - Starting robot")
+            self.is_running = True
+            # Reset state for fresh start
+            self.count_lines = 0
+            self.turning_case = 0
 
     def line_counter(self, p):
         """
@@ -411,17 +425,17 @@ class LineFollowerRobot:
         self.count_lines = 0
         self.setup_interrupts()
 
-    # def _calculate_distance(self) -> int:
-    #     """
-    #     Read distance from VL53L0X sensor.
+    def _calculate_distance(self) -> int:
+        """
+        Read distance from VL53L0X sensor.
         
-    #     Returns:
-    #         Distance in millimeters, or 9999 if sensor fails
-    #     """
-    #     distance = self.vl53l0.read()
-    #     print(">>> Dist: ", distance)
-    #     sleep(0.1)  # Wait for sensor reading
-    #     return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
+        Returns:
+            Distance in millimeters, or 9999 if sensor fails
+        """
+        distance = self.vl53l0.read()
+        print(">>> Dist: ", distance)
+        sleep(0.1)  # Wait for sensor reading
+        return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
     
     def _handle_identifying_cases(self, turns, lines):
         """
@@ -613,6 +627,8 @@ class LineFollowerRobot:
                 pass
 
     def _do_pick_box(self):
+        #TODO: Implement the picking the box up algorithm using different distance sensors.
+
         self.linear_actuator.set("extend", 90)
         sleep(2)
         self.direction_flag = "forward"
@@ -640,9 +656,9 @@ class LineFollowerRobot:
         Main control loop for the line follower.
         Continuously monitors sensors and adjusts motors until sequence is complete.
         """
-        # print("Robot ready. Press button to start...")
-        # while not self.is_running:
-        #     sleep(0.1)
+        print("Robot ready. Press button to start...")
+        while not self.is_running:
+            sleep(0.1)
 
         print("Start line follower")
         #Start the flashing LED to indicate running
@@ -650,7 +666,7 @@ class LineFollowerRobot:
         # Start moving forward
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
     
-        self._path_algorithm("G0", "A01")
+        self._path_algorithm("G0", "B01")
         # self.pick_box("G0", "B01")
         
         # while self.is_running:
