@@ -4,7 +4,7 @@ from sw.test_motor import Motor
 from sw.path import Path
 from sw.test_linear_actuator import Actuator
 from sw.libs.VL53L0X.VL53L0X import VL53L0X
-from sw.libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701 #Second distance sensor
+# from sw.libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701 #Second distance sensor
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 # from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
 
@@ -40,8 +40,8 @@ class LineFollowerRobot:
     SCL_PIN = 21
     YELLOW_LED = 14
 
-    TMF8X01_SDA_PIN = 18
-    TMF8X01_SCL_PIN = 19
+    # TMF8X01_SDA_PIN = 18
+    # TMF8X01_SCL_PIN = 19
 
     BUTTON_PIN = 17
     DEBOUNCE_MS = 200
@@ -57,7 +57,7 @@ class LineFollowerRobot:
         
         # Start distance sensor
         self.vl53l0.start()
-        self.tof.begin()
+        # self.tof.begin()
     
     def _init_sensors(self):
         """Initialize all sensor pins"""
@@ -70,7 +70,7 @@ class LineFollowerRobot:
         
         # config I2C Bus
         i2c_bus_vl5310 = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))  # I2C0 on GP8 & GP9
-        i2c_bus_tmf8x01 = I2C(1, sda=Pin(self.TMF8X01_SDA_PIN), scl=Pin(self.TMF8X01_SCL_PIN), freq=100000)  # I2C1 on GP2 & GP3
+        # i2c_bus_tmf8x01 = I2C(1, sda=Pin(self.TMF8X01_SDA_PIN), scl=Pin(self.TMF8X01_SCL_PIN), freq=100000)  # I2C1 on GP2 & GP3
         
         # Setup vl53l0 object
         self.vl53l0 = VL53L0X(i2c_bus_vl5310)
@@ -78,10 +78,10 @@ class LineFollowerRobot:
         self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
         
         # Setup TMF8x01 object
-        try:
-            self.tof = DFRobot_TMF8701(i2c_bus=i2c_bus_tmf8x01)
-        except: 
-            raise Exception("TMF8x01 not connected properly")
+        # try:
+        #     self.tof = DFRobot_TMF8701(i2c_bus=i2c_bus_tmf8x01)
+        # except: 
+        #     raise Exception("TMF8x01 not connected properly")
 
         # Setup digital button
         self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_DOWN)
@@ -100,7 +100,7 @@ class LineFollowerRobot:
     def _init_state(self):
         """Initialize all state variables"""
         # Motor speeds
-        self.left_wheel_speed = self.BASE_SPEED+5
+        self.left_wheel_speed = self.BASE_SPEED
         self.right_wheel_speed = self.BASE_SPEED
         
         # Direction control
@@ -136,7 +136,7 @@ class LineFollowerRobot:
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(1.2)
+        sleep(1.8)
         # while (self.signal_mid_right.value()==0):
         #     pass
         
@@ -148,7 +148,7 @@ class LineFollowerRobot:
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(1.2)
+        sleep(1.8)
         # while (self.signal_mid_left.value()==0):
         #     pass
     def motor_turn_right_back(self):
@@ -353,6 +353,8 @@ class LineFollowerRobot:
         Args:
             p: Pin that triggered the interrupt
         """
+
+        print("mid left:", self.signal_mid_left.value(), " mid right:", self.signal_mid_right.value())
 
         if not self.is_running:
             return
