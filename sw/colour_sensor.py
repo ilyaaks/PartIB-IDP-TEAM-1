@@ -9,12 +9,13 @@ class COLOUR:
     GREEN = (40, 100, 120)
     YELLOW = (120, 120, 40)
 
-class ColourSensorTest():
+class ColourSensor():
     def __init__(self):
         # i2c_bus = SoftI2C(sda=Pin(8), scl=Pin(9)) 
         i2c_bus_tcs = I2C(id=0, sda=Pin(8), scl=Pin(9), freq=100000)  # Reduced frequency for stability
-        print("I2C devices found:", i2c_bus_tcs.scan())
-        
+        # print("I2C devices found:", i2c_bus_tcs.scan())
+        control_pin = Pin(10, Pin.OUT)
+        control_pin.value(1)  # Power off the sensor (inverse logic)
         # Add delay for sensor initialization
         sleep(0.1)
         
@@ -24,8 +25,7 @@ class ColourSensorTest():
 
     def get_rgb_value(self) -> (int, int, int):
         # create an output pin at 18 
-        transistor = Pin(10, Pin.OUT)
-        transistor.value(0) # ON
+        colour_pin.value(0) # ON
 
         '''
         In the actual setup, we set the Pin.OUT to high (1)
@@ -46,7 +46,7 @@ class ColourSensorTest():
             return None
         
         sleep(1)
-        transistor.value(1) # OFF
+        colour_pin.value(1) # OFF
         sleep(1)
         return result
 
@@ -92,5 +92,5 @@ if __name__ == "__main__":
         if rgb:
             color = robot.detect_colour()
             print(f"Detected color: {color}")
-        sleep(1)
+        sleep(2)
     
