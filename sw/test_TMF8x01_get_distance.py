@@ -44,14 +44,13 @@
 from utime import sleep
 from machine import Pin, SoftI2C, I2C
 
-from libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701
+from sw.libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701
 
 def test_TMF8x01_get_distance():
     # Both options work
     # i2c_bus = SoftI2C(sda=Pin(8), scl=Pin(9), freq=100000)  # I2C0 on GP8 & GP9
-    i2c_bus = I2C(id=0, sda=Pin(8), scl=Pin(9), freq=100000) # I2C0 on GP8 & GP9
+    i2c_bus = I2C(id=1, sda=Pin(18), scl=Pin(19), freq=100000) # I2C0 on GP8 & GP9
     #print(i2c_bus.scan()) # 65=0x41
-    assert len(i2c_bus.scan()) == 1 # This demo requires exactly one device
 
 
     # Set the correct device
@@ -94,9 +93,9 @@ def test_TMF8x01_get_distance():
     '''
 
     if device == "TMF8701":
-      tof.start_measurement(calib_m = tof.eMODE_NO_CALIB, mode = tof.ePROXIMITY)
-      #tof.start_measurement(calib_m = tof.eMODE_NO_CALIB, mode = tof.eCOMBINE)
       #tof.start_measurement(calib_m = tof.eMODE_NO_CALIB, mode = tof.eDISTANCE)
+      tof.start_measurement(calib_m = tof.eMODE_NO_CALIB, mode = tof.eDISTANCE)
+      #tof.start_measurement(calib_m = tof.eMODE_NO_CALIB, mode = tof.ePROXIMITY)
     elif device == "TMF8801":
       tof.start_measurement(calib_m = tof.eMODE_NO_CALIB)
     else:
@@ -104,6 +103,8 @@ def test_TMF8x01_get_distance():
 
     while True:
       if(tof.is_data_ready() == True):
+        # Debug: print raw values
+        print(f"DEBUG: disH={tof.result_dict.get('disH', 'N/A')}, disL={tof.result_dict.get('disL', 'N/A')}, _timestamp={tof._timestamp}")
         print(f"Distance = {tof.get_distance_mm()} mm{" (For TMF8701, make sure you read about mode selection above!)" if device == "TMF8701" else ""}")
       sleep(0.5)
 

@@ -24,7 +24,7 @@ class ColourSensorTest():
 
     def get_rgb_value(self) -> (int, int, int):
         # create an output pin at 18 
-        transistor = Pin(16, Pin.OUT)
+        transistor = Pin(10, Pin.OUT)
         transistor.value(0) # ON
 
         '''

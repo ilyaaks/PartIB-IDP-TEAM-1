@@ -712,8 +712,10 @@ class DFRobot_TMF8801(DFRobot_TMF8x01):
     self._calib_data = [0x41,0x57,0x01,0xFD,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x04]
     self._algo_state_data = [0xB1, 0xA9, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     self._measure_cmd_set = [0x01, 0xA3, 0x00, 0x00,0x00, 0x64, 0x03, 0x84, 0x02]
-    DFRobot_TMF8x01.__init__(self, i2c_bus, i2c_address, fw_fname="/libs/DFRobot_TMF8x01/fw/TMF8801/main_app_3v3_k2.hex")
+    DFRobot_TMF8x01.__init__(self, i2c_bus, i2c_address, fw_fname="/sw/libs/DFRobot_TMF8x01/fw/TMF8801/main_app_3v3_k2.hex")
   
+# test test test
+
   def start_measurement(self, calib_m):
     '''!
     @brief Config measurement params to enable measurement. Need to call stop_measurement to stop ranging action.
@@ -733,7 +735,7 @@ class DFRobot_TMF8701(DFRobot_TMF8x01):
     self._calib_data = [0x41,0x57,0x01,0xFD,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x04]
     self._algo_state_data = [0xB1, 0xA9, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     self._measure_cmd_set = [0x01, 0xA3, 0x00, 0x00,0x00, 0x64, 0x03, 0x84, 0x02]
-    DFRobot_TMF8x01.__init__(self, i2c_bus, i2c_address, fw_fname="/libs/DFRobot_TMF8x01/fw/TMF8701/main_app_3v3_k2.hex")
+    DFRobot_TMF8x01.__init__(self, i2c_bus, i2c_address, fw_fname="/sw/libs/DFRobot_TMF8x01/fw/TMF8701/main_app_3v3_k2.hex")
 
   def start_measurement(self, calib_m, mode):
     '''
