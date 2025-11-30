@@ -669,6 +669,7 @@ class LineFollowerRobot:
     def pick_box(self, start = "G0", destination = "A01") -> (str, str):
         self._path_algorithm(start, destination)
         temp_line_counter = int(destination[2])
+        self.found_box = False
 
         current_bay = destination[0:1] # It doesn`t matter the specific bay number, just the side
         self.direction_flag = "forward"
@@ -808,10 +809,10 @@ class LineFollowerRobot:
         self.motors_off()
         self._actuator_final_position()
         self.linear_actuator.off()
-        self.directionx_flag = "reverse"
+        self.direction_flag = "reverse"
         self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED, delay = 1.5)
-        sself.motors_off()
-        self._linear_actuator_initial_position()
+        self.motors_off()
+        self._actuator_initial_position()
 
     
 
