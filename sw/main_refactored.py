@@ -7,21 +7,28 @@ from sw.libs.VL53L0X.VL53L0X import VL53L0X
 from sw.libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701  # Second distance sensor
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
-from sw.colour_sensor import *
+from sw.colour_sensor import ColourSensor
 
 
 class LineFollowerRobot:
     """
-    Line-following robot with integrated sensor processing and motor control.
-    Encapsulates all state and behavior for autonomous line following.
+    Autonomous line-following robot with box detection, pickup, and sorting capabilities.
+    
+    Features:
+    - Line following using IR sensors with interrupt-driven control
+    - Distance measurement using VL53L0X and TMF8x01 sensors
+    - Color detection for box sorting
+    - Linear actuator control for box pickup/placement
+    - Path planning algorithm for navigation between bays
     """
 
-    # Configuration constants
-    BASE_SPEED = 60
-    SPEED_ADJUSTMENT = 8
-    MIN_SPEED = 30
-    MAX_SPEED = 80
+    # Motor speed configuration constants
+    BASE_SPEED = 60           # Default speed for straight line following
+    SPEED_ADJUSTMENT = 8      # Speed delta for line correction
+    MIN_SPEED = 30            # Minimum motor speed
+    MAX_SPEED = 80            # Maximum motor speed
 
+    # Bay search order (unused - reserved for future implementation)
     SEARCH_LIST = [
         "B01", "B02", "B03", "B04", "B05", "B06",
         "B16", "B15", "B14", "B13", "B12", "B11",
@@ -29,23 +36,30 @@ class LineFollowerRobot:
         "A06", "A05", "A04", "A03", "A02", "A01"
     ]
 
-    # Pin configurations
-    MID_RIGHT_PIN = 26
-    MID_LEFT_PIN = 27
-    FAR_RIGHT_PIN = 22
-    FAR_LEFT_PIN = 28
-    SDA_PIN = 20
-    SCL_PIN = 21
-    YELLOW_LED = 14
+    # Pin configurations for sensors and actuators for sensors and actuators
+    MID_RIGHT_PIN = 26        # IR sensor for line following (right center)
+    MID_LEFT_PIN = 27         # IR sensor for line following (left center)
+    FAR_RIGHT_PIN = 22        # IR sensor for line counting (right outer)
+    FAR_LEFT_PIN = 28         # IR sensor for line counting (left outer)
+    SDA_PIN = 20              # I2C data line for VL53L0X distance sensor
+    SCL_PIN = 21              # I2C clock line for VL53L0X distance sensor
+    YELLOW_LED = 14           # Status indicator LED
 
-    TMF8X01_SDA_PIN = 18
-    TMF8X01_SCL_PIN = 19
+    TMF8X01_SDA_PIN = 18      # I2C data line for TMF8x01 ToF sensor
+    TMF8X01_SCL_PIN = 19      # I2C clock line for TMF8x01 ToF sensor
 
-    BUTTON_PIN = 17
-    DEBOUNCE_MS = 200
+    BUTTON_PIN = 17           # Start/stop button input
+    DEBOUNCE_MS = 200         # Button debounce time in milliseconds
 
     def __init__(self):
-        """Initialize robot hardware and state"""
+        """Initialize robot hardware and state.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         # Initialize hardware
         self._init_sensors()
         self._init_motors()
@@ -59,7 +73,23 @@ class LineFollowerRobot:
         self.tof.start_measurement(calib_m=self.tof.eMODE_NO_CALIB, mode=self.tof.ePROXIMITY)
 
     def _init_sensors(self):
-        """Initialize all sensor pins"""
+        """Initialize all sensors and I2C peripherals.
+        
+        Sets up:
+        - 4 IR line sensors (mid and far, left and right)
+        - VL53L0X distance sensor (forward-facing)
+        - TMF8x01 Time-of-Flight sensor (forward-facing)
+        - TCS3472 color sensor
+        - URM09 ultrasonic sensor (analog)
+        - Button input for manual control
+        - Status LED
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.signal_mid_right = Pin(self.MID_RIGHT_PIN, Pin.IN, Pin.PULL_DOWN)
         self.signal_mid_left = Pin(self.MID_LEFT_PIN, Pin.IN, Pin.PULL_DOWN)
         self.signal_far_right = Pin(self.FAR_RIGHT_PIN, Pin.IN, Pin.PULL_DOWN)
@@ -95,13 +125,41 @@ class LineFollowerRobot:
         self.ADC_Resolution = 65535
 
     def _init_motors(self):
-        """Initialize motor controllers"""
+        """Initialize motor controllers for wheels and linear actuator.
+        
+        Sets up:
+        - Left wheel motor (Motor Driver #2)
+        - Right wheel motor (Motor Driver #3)
+        - Linear actuator for box pickup mechanism
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.motor_left = Motor(dirPin=7, PWMPin=6)  # Motor left is controlled from Motor Driv2 #2
         self.motor_right = Motor(dirPin=4, PWMPin=5)  # Motor right is controlled from Motor Driv2 #3
         self.linear_actuator = Actuator(dirPin=0, PWMPin=1)
 
     def _init_state(self):
-        """Initialize all state variables"""
+        """Initialize all runtime state variables and position the actuator.
+        
+        Initializes:
+        - Motor speed variables
+        - Direction flags for forward/reverse movement
+        - Sensor state tracking for line following
+        - Line counter for navigation
+        - Button debouncing state
+        - Box detection flags
+        - Sets linear actuator to initial position
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         # Motor speeds
         self.left_wheel_speed = self.BASE_SPEED
         self.right_wheel_speed = self.BASE_SPEED
@@ -123,6 +181,16 @@ class LineFollowerRobot:
         self._actuator_initial_position()
 
     def _actuator_initial_position(self):
+        """Move linear actuator to initial (raised) position for navigation.
+        
+        Extends actuator fully, then retracts to clear ground and boxes.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.linear_actuator.set("extend", 90)
         sleep(4)
         self.linear_actuator.set("retract", 90)
@@ -130,12 +198,32 @@ class LineFollowerRobot:
         self.linear_actuator.off()
 
     def _actuator_final_position(self):
+        """Extend linear actuator to final position for box placement.
+        
+        Fully extends actuator to release box into sorting bay.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.linear_actuator.set("extend", 90)
         sleep(4)
         self.linear_actuator.off()
 
     def motor_turn_right(self):
-        """Configure motor speeds for right turn"""
+        """Execute a right turn maneuver on the line.
+        
+        Turns robot right by rotating left wheel forward and right wheel backward,
+        then waits for mid-left sensor to detect line before straightening.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = -1 * self.MIN_SPEED
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
@@ -150,7 +238,17 @@ class LineFollowerRobot:
             pass
 
     def motor_turn_left(self):
-        """Configure motor speeds for left turn"""
+        """Execute a left turn maneuver on the line.
+        
+        Turns robot left by rotating right wheel forward and left wheel backward,
+        then waits for mid-right sensor to detect line before straightening.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.left_wheel_speed = -1 * self.MIN_SPEED
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
@@ -165,7 +263,17 @@ class LineFollowerRobot:
             pass
 
     def motor_turn_right_bay(self):
-        """Configure motor speeds for right turn"""
+        """Execute a right turn specifically for entering/exiting bays.
+        
+        Similar to motor_turn_right but with adjusted timing and speed
+        for sharper turns required when approaching collection bays.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         # while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
         #     pass
         # Turn right
@@ -185,6 +293,17 @@ class LineFollowerRobot:
             pass
 
     def motor_turn_left_bay(self):
+        """Execute a left turn specifically for entering/exiting bays.
+        
+        Similar to motor_turn_left but with adjusted timing and speed
+        for sharper turns required when approaching collection bays.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.right_wheel_speed = self.MAX_SPEED
         self.left_wheel_speed = -self.BASE_SPEED
         self.direction_flag = "forward"
@@ -197,7 +316,17 @@ class LineFollowerRobot:
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
 
     def motor_turn_right_back(self):
-        """Configure motor speeds for right turn"""
+        """Execute a right turn while reversing.
+        
+        Used when exiting bays - reverses with asymmetric wheel speeds
+        to turn right, then switches to forward once line is detected.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 0
         self.direction_flag = "reverse"
@@ -214,7 +343,17 @@ class LineFollowerRobot:
             pass
 
     def motor_turn_left_back(self):
-        """Configure motor speeds for left turn"""
+        """Execute a left turn while reversing.
+        
+        Used when exiting bays - reverses with asymmetric wheel speeds
+        to turn left, then switches to forward once line is detected.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.left_wheel_speed = 0
         self.right_wheel_speed = self.MAX_SPEED
         self.direction_flag = "reverse"
@@ -231,7 +370,17 @@ class LineFollowerRobot:
             pass
 
     def _reverse_on_the_spot(self):
-        """Reverse the robot on the spot until both mid sensors detect the line"""
+        """Perform a 180-degree turn in place by reversing motors in opposite directions.
+        
+        Rotates robot on its axis for approximately 2 seconds to face opposite direction.
+        Used after completing box placement to return to navigation mode.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.direction_flag = "reverse"
         left_wheel = -self.MAX_SPEED
         right_wheel = self.MAX_SPEED
@@ -242,13 +391,15 @@ class LineFollowerRobot:
         self.motors_off()
 
     def motor_go_straight(self, speed_left, speed_right, delay=0):
-        """
-        Execute straight movement using the global direction_flag
+        """Execute straight movement using the global direction_flag.
         
-        Args:
-            speed_left: Speed for left motor (0-100)
-            speed_right: Speed for right motor (0-100)
-            delay: Optional delay in seconds after moving
+        Parameters:
+            speed_left (int): Speed for left motor (0-100)
+            speed_right (int): Speed for right motor (0-100)
+            delay (float): Optional delay in seconds after moving (default: 0)
+        
+        Returns:
+            None
         """
         if self.direction_flag == "forward":
             self.motor_left.Forward(speed_left)
@@ -260,6 +411,20 @@ class LineFollowerRobot:
             sleep(delay)
 
     def motor_turn(self, speed_left, speed_right):
+        """Execute motor movement with independent wheel control.
+        
+        Automatically determines direction based on speed signs:
+        - Both positive: Move forward/straight
+        - Left positive, right negative: Turn right
+        - Left negative, right positive: Turn left
+        
+        Parameters:
+            speed_left (int): Speed for left motor (-100 to 100, negative = reverse)
+            speed_right (int): Speed for right motor (-100 to 100, negative = reverse)
+        
+        Returns:
+            None
+        """
         if speed_left > 0 and speed_right > 0:
             self.motor_go_straight(speed_left, speed_right)
         elif speed_left > 0 and speed_right < 0:
@@ -273,12 +438,26 @@ class LineFollowerRobot:
             self.motor_right.Forward(speed_right)
 
     def motors_off(self):
-        """Turn off both motors"""
+        """Turn off both motors.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.motor_left.off()
         self.motor_right.off()
 
     def destroy(self):
-        """Clean up resources - stop sensors and motors"""
+        """Clean up resources - stop sensors and motors.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         try:
             self.vl53l0.stop()
         except Exception as e:
@@ -287,7 +466,14 @@ class LineFollowerRobot:
             self.motors_off()
 
     def setup_interrupts(self):
-        """Set up interrupt handlers for all sensors"""
+        """Set up interrupt handlers for all sensors.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
 
         # Create closures that capture self for the interrupt handlers
         def line_handler(p):
@@ -308,7 +494,14 @@ class LineFollowerRobot:
         self.button.irq(handler=self.button_handler, trigger=Pin.IRQ_FALLING)
 
     def disable_interrupts(self):
-        """Disable interrupt handlers for all sensors"""
+        """Disable interrupt handlers for all sensors.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.signal_mid_right.irq(handler=None)
         self.signal_mid_left.irq(handler=None)
         self.signal_far_left.irq(handler=None)
@@ -317,15 +510,23 @@ class LineFollowerRobot:
         self.prev_sensor_right = 0
 
     def _path_algorithm(self, current_position, desired_position):
-        '''
-        Args:  "GB", "GG", "G0", "GY", "GR"
-        "B01", "B02", "B03", "B04", "B05", "B06", 
-        "B16", "B15", "B14", "B13", "B12", "B11", 
-        "A11", "A12", "A13", "A14", "A15", "A16",
-        "A06", "A05", "A04", "A03", "A02", "A01"
-
-        return a list of commands to go from current to desired position
-        '''
+        """Navigate robot from current position to desired position using predefined paths.
+        
+        Position format:
+        - "G0": Ground/start position
+        - "B0X" / "B1X": Bay B, side 0/1, line X (1-6)
+        - "A0X" / "A1X": Bay A, side 0/1, line X (1-6)
+        - Color names: Sorting bay destinations
+        
+        Executes the path by calling appropriate Path class methods and executing turns.
+        
+        Parameters:
+            current_position (str): Starting position (format: "G0", "B01"-"B16", "A01"-"A16")
+            desired_position (str): Target position (same format, or color bay: "GREEN", "RED", "BLUE", "YELLOW")
+        
+        Returns:
+            None
+        """
 
         if (current_position.startswith("G") and desired_position.startswith("B0")):
             turns, lines = Path._path_G_to_B0(current_position, desired_position)
@@ -417,12 +618,15 @@ class LineFollowerRobot:
             self._handle_identifying_cases(turns, lines)
 
     def button_handler(self, p):
-        """
-        Interrupt handler for button press.
+        """Interrupt handler for button press.
+        
         Toggles robot state between running and stopped.
-
-        Args:
-            p: Pin that triggered the interrupt
+        
+        Parameters:
+            p (Pin): Pin object that triggered the interrupt
+        
+        Returns:
+            None
         """
         current_time = ticks_ms()
 
@@ -448,14 +652,17 @@ class LineFollowerRobot:
             self.count_lines = 0
 
     def line_counter(self, p):
-        """
-        Interrupt handler for line counting (both rising and falling edges).
+        """Interrupt handler for line counting (both rising and falling edges).
+        
         Detects when robot crosses perpendicular lines using far sensors.
         - Rising edge (0→1): Increments line count
         - Falling edge (1→0): Resets the on_perpendicular_line flag when both sensors are off
         
-        Args:
-            p: Pin that triggered the interrupt
+        Parameters:
+            p (Pin): Pin object that triggered the interrupt
+        
+        Returns:
+            None
         """
         if not self.is_running:
             return
@@ -478,12 +685,15 @@ class LineFollowerRobot:
             print("Left perpendicular line")
 
     def line_follower(self, p):
-        """
-        Interrupt handler for line sensors.
+        """Interrupt handler for line sensors.
+        
         Adjusts motor speeds based on sensor readings to keep robot on line.
         
-        Args:
-            p: Pin that triggered the interrupt
+        Parameters:
+            p (Pin): Pin object that triggered the interrupt
+        
+        Returns:
+            None
         """
 
         # print("mid left:", self.signal_mid_left.value(), " mid right:", self.signal_mid_right.value())
@@ -536,12 +746,14 @@ class LineFollowerRobot:
         self.sensor_right_prev = sensor_mid_right
 
     def _execute_turn(self, turn_function, case_name):
-        """
-        Helper method to execute a turn and update state
+        """Helper method to execute a turn and update state.
         
-        Args:
-            turn_function: Method to call for turning (motor_turn_left or motor_turn_right)
-            case_name: Name of current case for logging
+        Parameters:
+            turn_function (callable): Method to call for turning (motor_turn_left or motor_turn_right)
+            case_name (str): Name of current case for logging
+        
+        Returns:
+            None
         """
         print(f"start: {case_name} turning")
         # Allow the turn to be done
@@ -554,11 +766,13 @@ class LineFollowerRobot:
         self.setup_interrupts()
 
     def _calculate_distance(self) -> int:
-        """
-        Read distance from VL53L0X sensor.
+        """Read distance from VL53L0X sensor.
+        
+        Parameters:
+            None
         
         Returns:
-            Distance in millimeters, or 9999 if sensor fails
+            int: Distance in millimeters, or 9999 if sensor fails
         """
         distance = self.vl53l0.read()
         print(">>> Dist: ", distance)
@@ -566,10 +780,28 @@ class LineFollowerRobot:
         return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
 
     def _calculate_distance_tof(self) -> int:
+        """Read distance from TMF8x01 Time-of-Flight sensor.
+        
+        Parameters:
+            None
+        
+        Returns:
+            int: Distance in millimeters if data is ready, otherwise None
+        """
         if (self.tof.is_data_ready() == True):
             return self.tof.get_distance_mm()
 
     def _calcultaed_distance_URM09(self) -> int:
+        """Read distance from URM09 ultrasonic sensor via analog input.
+        
+        Converts ADC reading to distance using sensor's voltage-distance relationship.
+        
+        Parameters:
+            None
+        
+        Returns:
+            int: Distance in millimeters, or 8173 on error
+        """
         adc_value = self.adc_pin.read_u16()
         distance = (adc_value / self.ADC_Resolution) * self.Max_range
         if distance is not None:
@@ -579,12 +811,14 @@ class LineFollowerRobot:
             return 8173
 
     def _handle_identifying_cases(self, turns, lines):
-        """
-        Navigate through a sequence of turns based on line counts.
+        """Navigate through a sequence of turns based on line counts.
         
-        Args:
-            turns: List of turn directions ("right_forward", "left_forward", "right_backward", "left_backward","straight" and "backward")
-            lines: List of line counts at which to execute each turn
+        Parameters:
+            turns (list): List of turn directions ("right_forward", "left_forward", "right_backward", "left_backward", "straight", "backward")
+            lines (list): List of line counts at which to execute each turn
+        
+        Returns:
+            None
         """
         current_instruction = 0  # Track which instruction we're on
         while current_instruction < len(lines):
@@ -612,11 +846,13 @@ class LineFollowerRobot:
         print("Finished all turns in path")
 
     def _go_to_next_bay(self, current_bay: str):
-        """
-        Move the robot to the next bay in the search list.
+        """Move the robot to the next bay in the search list.
         
-        Args:
-            current_bay: Current bay position as a string (e.g., "B01")
+        Parameters:
+            current_bay (str): Current bay position as a string (e.g., "B0", "B1", "A0", "A1")
+        
+        Returns:
+            str: Next bay identifier or "G0" if all bays searched
         """
         if (current_bay == "B0"):
             self._path_algorithm("B06", "B16")
@@ -632,6 +868,25 @@ class LineFollowerRobot:
             return "A1"
 
     def pick_box(self, start="G0", destination="A01") -> (str, str):
+        """Navigate to a bay, search for a box, identify its color, and pick it up.
+        
+        Process:
+        1. Navigate to specified bay
+        2. Search each line in bay for boxes using distance sensors
+        3. When box detected, turn into bay
+        4. Identify box color
+        5. Pick up box with actuator
+        6. Return to main line
+        
+        Parameters:
+            start (str): Starting position (default: "G0" - ground position)
+            destination (str): Initial bay to search (default: "A01")
+        
+        Returns:
+            tuple: (current_position, destination_bay)
+                - current_position (str): Bay where box was found (e.g., "B03")
+                - destination_bay (str): Color-coded destination ("GREEN", "RED", "BLUE", "YELLOW", or "G0")
+        """
         self._path_algorithm(start, destination)
         temp_line_counter = int(destination[2])
         self.found_box = False
@@ -675,6 +930,16 @@ class LineFollowerRobot:
         return current_position, position_to_go
 
     def moving_between_lines(self, position):
+        """Wait until robot crosses to the next perpendicular line.
+        
+        Uses appropriate far sensor based on bay side to detect line crossing.
+        
+        Parameters:
+            position (str): Current bay position ("B0", "B1", "A0", or "A1")
+        
+        Returns:
+            None
+        """
         if position == "B0" or position == "A1":
             while (self.signal_far_left.value() == 0):
                 pass
@@ -683,6 +948,17 @@ class LineFollowerRobot:
                 pass
 
     def is_box(self, position) -> bool:
+        """Check for box presence while crossing a line using distance sensors.
+        
+        Uses appropriate distance sensor (ToF for B0/A1, URM09 for B1/A0)
+        to detect boxes within 300mm during line crossing.
+        
+        Parameters:
+            position (str): Current bay position ("B0", "B1", "A0", or "A1")
+        
+        Returns:
+            bool: False (always - sets self.found_box flag as side effect)
+        """
         if position == "B0" or position == "A1":
             while (self.signal_far_left.value() == 1):
                 if (self._calculate_distance_tof() < 300):
@@ -697,7 +973,16 @@ class LineFollowerRobot:
             return False
 
     def _before_pick_box(self, current_position: str):
-        """Here we want to help turn and then it will automatically readjust itself
+        """Turn into bay to approach detected box.
+        
+        Executes appropriate turn (left for B0/A1, right for B1/A0) to face box.
+        Line following interrupts will auto-correct position after turn.
+        
+        Parameters:
+            current_position (str): Current bay side ("B0", "B1", "A0", or "A1")
+        
+        Returns:
+            None
         """
         if current_position == "B0" or current_position == "A1":
             self._execute_turn(self.motor_turn_left_bay, f"before_pick_box_{current_position}")
@@ -709,7 +994,19 @@ class LineFollowerRobot:
             # Wait until centered on line or timeout
 
     def _after_pick_box(self, current_position):
-        """ First we want to reverse out and then go to the ground position"""
+        """Return robot to main line after picking up box.
+        
+        Process:
+        1. Reverse out of bay
+        2. Execute backward turn to face main line
+        3. Move forward until fully on line
+        
+        Parameters:
+            current_position (str): Current bay side ("B0", "B1", "A0", or "A1")
+        
+        Returns:
+            None
+        """
         if current_position[0:1] == "B0" or current_position[0:1] == "A1":
             self.direction_flag = "reverse"
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay=0.5)
@@ -730,6 +1027,21 @@ class LineFollowerRobot:
         # self.motors_off()
 
     def _do_pick_box(self):
+        """Approach box, identify color, and activate pickup mechanism.
+        
+        Attempts up to 3 times to:
+        1. Approach box to optimal distance
+        2. Detect box color using color sensor
+        3. Activate linear actuator to secure box
+        
+        If color detection fails, reverses and retries.
+        
+        Parameters:
+            None
+        
+        Returns:
+            str: Detected color name ("GREEN", "RED", "BLUE", "YELLOW") or None on failure
+        """
         colour_detected = False
         number_of_attempts = 0
         identified_colour = None
@@ -760,6 +1072,17 @@ class LineFollowerRobot:
         return identified_colour
 
     def _approach_box(self):
+        """Move slowly toward box until reaching optimal distance for color detection.
+        
+        Uses VL53L0X distance sensor to stop at 60mm from box,
+        ideal distance for color sensor accuracy.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.direction_flag = "forward"
         self.motor_go_straight(self.MIN_SPEED, self.MIN_SPEED)
         while (self._calculate_distance() > 60):
@@ -768,6 +1091,20 @@ class LineFollowerRobot:
         self.motors_off()
 
     def _place_box(self):
+        """Place box in sorting bay by extending actuator and reversing out.
+        
+        Process:
+        1. Move forward into bay
+        2. Extend actuator to release box
+        3. Reverse out of bay
+        4. Return actuator to initial position
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
         self.direction_flag = "forward"
         self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED, delay=3)
         self.motors_off()
@@ -779,9 +1116,16 @@ class LineFollowerRobot:
         self._actuator_initial_position()
 
     def run(self):
-        """
-        Main control loop for the line follower.
+        """Main control loop for the line follower.
+        
         Continuously monitors sensors and adjusts motors until sequence is complete.
+        Waits for button press to start, then executes box search, pickup, and placement.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
         """
         print("Robot ready. Press button to start...")
         while not self.is_running:
