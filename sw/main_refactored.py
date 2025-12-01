@@ -7,7 +7,7 @@ from sw.libs.VL53L0X.VL53L0X import VL53L0X
 from sw.libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701  # Second distance sensor
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
-from sw.colour_sensor import ColourSensor
+# from sw.colour_sensor import ColourSensor
 
 
 class LineFollowerRobot:
@@ -24,7 +24,7 @@ class LineFollowerRobot:
 
     # Motor speed configuration constants
     BASE_SPEED = 60           # Default speed for straight line following
-    SPEED_ADJUSTMENT = 8      # Speed delta for line correction
+    SPEED_ADJUSTMENT = 6      # Speed delta for line correction
     MIN_SPEED = 30            # Minimum motor speed
     MAX_SPEED = 80            # Maximum motor speed
 
@@ -117,11 +117,11 @@ class LineFollowerRobot:
         self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_DOWN)
 
         # Setup colour sensor:
-        self.colour_sensor = ColourSensor()
+        # self.colour_sensor = ColourSensor()
 
         # Setup the URM09 Ultrasonic sensor:
         self.Max_range = 500
-        self.adc_pin = ADC(Pin(26))
+        # self.adc_pin = ADC(Pin(26))
         self.ADC_Resolution = 65535
 
     def _init_motors(self):
@@ -178,7 +178,7 @@ class LineFollowerRobot:
         self.last_button_time = 0
         self.list_of_bays = ["GREEN", "RED", "BLUE", "YELLOW"]
 
-        self._actuator_initial_position()
+        # self._actuator_initial_position()
 
     def _actuator_initial_position(self):
         """Move linear actuator to initial (raised) position for navigation.
@@ -224,17 +224,13 @@ class LineFollowerRobot:
         Returns:
             None
         """
+        self.motors_off()
+        sleep(0.1)
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = -1 * self.MIN_SPEED
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(1.2)
+        sleep(1.52)
         while (self.signal_mid_left.value() == 0):
-            pass
-        self.right_wheel_speed = self.MAX_SPEED
-        self.left_wheel_speed = self.BASE_SPEED
-        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(0.2)
-        while (self.signal_mid_right.value() == 0):
             pass
 
     def motor_turn_left(self):
@@ -249,17 +245,13 @@ class LineFollowerRobot:
         Returns:
             None
         """
+        self.motors_off()
+        sleep(0.1)
         self.left_wheel_speed = -1 * self.MIN_SPEED
         self.right_wheel_speed = self.MAX_SPEED
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(1.2)
+        sleep(1.52)
         while (self.signal_mid_right.value() == 0):
-            pass
-        self.left_wheel_speed = self.MAX_SPEED
-        self.right_wheel_speed = self.BASE_SPEED
-        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(0.2)
-        while (self.signal_mid_left.value() == 0):
             pass
 
     def motor_turn_right_bay(self):
@@ -278,18 +270,17 @@ class LineFollowerRobot:
         #     pass
         # Turn right
         self.left_wheel_speed = self.MAX_SPEED
-        self.right_wheel_speed = -self.BASE_SPEED
-        self.direction_flag = "forward"
+        self.right_wheel_speed = 10
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
         sleep(1.5)
         while (self.signal_mid_left.value() == 0):
             pass
         # Adjust to line
-        self.right_wheel_speed = self.MAX_SPEED
+        self.right_wheel_speed = -self.BASE_SPEED
         self.left_wheel_speed = self.BASE_SPEED
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(0.35)
-        while (self.signal_mid_right.value() == 0):
+        sleep(0.4)
+        while (self.signal_mid_left.value() == 0):
             pass
 
     def motor_turn_left_bay(self):
@@ -425,13 +416,13 @@ class LineFollowerRobot:
         Returns:
             None
         """
-        if speed_left > 0 and speed_right > 0:
+        if speed_left >= 0 and speed_right >= 0:
             self.motor_go_straight(speed_left, speed_right)
-        elif speed_left > 0 and speed_right < 0:
+        elif speed_left >= 0 and speed_right <= 0:
             speed_right = abs(speed_right)
             self.motor_left.Forward(speed_left)
             self.motor_right.Reverse(speed_right)
-        elif speed_left < 0 and speed_right > 0:
+        elif speed_left <= 0 and speed_right >= 0:
             # Turn left: left motor reverse, right motor forward
             speed_left = abs(speed_left)
             self.motor_left.Reverse(speed_left)
@@ -504,8 +495,8 @@ class LineFollowerRobot:
         """
         self.signal_mid_right.irq(handler=None)
         self.signal_mid_left.irq(handler=None)
-        self.signal_far_left.irq(handler=None)
-        self.signal_far_right.irq(handler=None)
+        # self.signal_far_left.irq(handler=None)
+        # self.signal_far_right.irq(handler=None)
         self.prev_sensor_left = 0
         self.prev_sensor_right = 0
 
@@ -1135,12 +1126,9 @@ class LineFollowerRobot:
         # Start the flashing LED to indicate running
         self.yellow_led.value(0)
         # Start the algorithm to pick boxes
-        current_position, position_to_go = self.pick_box(start="G0", destination="A01")
-        print(f"New position: {position_to_go}")
-        self._path_algorithm(current_position, position_to_go)
-        if (position_to_go in self.list_of_bays):
-            self._place_box()
-        self._reverse_on_the_spot()
+        self._path_algorithm("G0", "A16")
+        self._before_pick_box("A16")
+        self._do_pick_box()
 
         # Last line of the run function
         print("Run function has ended.")

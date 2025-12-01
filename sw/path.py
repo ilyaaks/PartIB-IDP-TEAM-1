@@ -22,7 +22,7 @@ class Path:
     @staticmethod
     def _path_G_to_A1(current_position, desired_position):
         # Implement the path logic from G to A1
-        return ["straight", "left_forward", "right_forward", "right_forward", "right_forward", "right_forward", "right_forward", "stop"], [0, 2, 2, 8, 1, 1, 1, int(desired_position[2])]
+        return ["straight", "left_forward", "right_forward", "right_forward", "right_forward", "right_forward", "right_forward", "stop"], [0, 2, 2, 7, 1, 1, 1, int(desired_position[2])]
 
     @staticmethod
     def _path_B0_to_G(current_position, desired_position):
@@ -164,7 +164,7 @@ class Path:
 
     @staticmethod
     def _path_A1_to_Yellow_bay(current_position, desired_position):
-        return ["straight", "left_forward", "left_forward", "left_forward", "left_forward", "left_forward", "right_forward", "stop"], [0, int(current_position[2]), 1, 1, 1, 8,, 4]
+        return ["straight", "left_forward", "left_forward", "left_forward", "left_forward", "left_forward", "right_forward", "stop"], [0, int(current_position[2]), 1, 1, 1, 8, 3, 1]
 
     # Go to next bay commands:
     @staticmethod

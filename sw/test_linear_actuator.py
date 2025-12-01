@@ -20,8 +20,8 @@ class Actuator:
 def test_actuator1():
     actuator1 = Actuator(dirPin=0, PWMPin=1)  # Actuator 1 controlled from Motor Driv1 #1, which is on GP0/1
     print("Testing Actuator 1")
-    actuator1.set(dir ="retract", speed = 90)  # extend at 50% speed
-    sleep(1.5)  # Give actuator time to retract (adjust time as needed)
+    actuator1.set(dir ="extend", speed = 90)  # extend at 50% speed
+    sleep(0.5)  # Give actuator time to retract (adjust time as needed)
     actuator1.off()
     print("Actuator test complete")
     
