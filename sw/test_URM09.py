@@ -6,7 +6,7 @@ def test():
     Max_range = 500  # Maximum range in cm
     ADC_Resolution = 65535  # 16-bit ADC resolution
     
-    input_pin = ADC(Pin(26))
+    input_pin = ADC(Pin(27))
     
     print("URM09 Ultrasonic Sensor Test (Analog Mode)")
     print("Press Ctrl+C to stop")

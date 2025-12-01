@@ -7,7 +7,7 @@ from sw.libs.VL53L0X.VL53L0X import VL53L0X
 from sw.libs.DFRobot_TMF8x01.DFRobot_TMF8x01 import DFRobot_TMF8801, DFRobot_TMF8701  # Second distance sensor
 # from sw.libs.DFRobot_URM09.DFRobot_URM09 import DFRobot_URM09
 from sw.libs.tcs3472_micropython.tcs3472 import tcs3472
-# from sw.colour_sensor import ColourSensor
+from sw.colour_sensor import ColourSensor
 
 
 class LineFollowerRobot:
@@ -38,7 +38,7 @@ class LineFollowerRobot:
 
     # Pin configurations for sensors and actuators for sensors and actuators
     MID_RIGHT_PIN = 26        # IR sensor for line following (right center)
-    MID_LEFT_PIN = 27         # IR sensor for line following (left center)
+    MID_LEFT_PIN = 16         # IR sensor for line following (left center) (instead of 27)
     FAR_RIGHT_PIN = 22        # IR sensor for line counting (right outer)
     FAR_LEFT_PIN = 28         # IR sensor for line counting (left outer)
     SDA_PIN = 20              # I2C data line for VL53L0X distance sensor
@@ -117,11 +117,11 @@ class LineFollowerRobot:
         self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_DOWN)
 
         # Setup colour sensor:
-        # self.colour_sensor = ColourSensor()
+        self.colour_sensor = ColourSensor()
 
         # Setup the URM09 Ultrasonic sensor:
         self.Max_range = 500
-        # self.adc_pin = ADC(Pin(26))
+        self.adc_pin = ADC(Pin(27))
         self.ADC_Resolution = 65535
 
     def _init_motors(self):
@@ -319,7 +319,7 @@ class LineFollowerRobot:
             None
         """
         self.left_wheel_speed = self.MAX_SPEED
-        self.right_wheel_speed = 0
+        self.right_wheel_speed =-self.BASE_SPEED
         self.direction_flag = "reverse"
         self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
         sleep(1.5)
@@ -695,7 +695,7 @@ class LineFollowerRobot:
         # Read current sensor values (only mid sensors needed for line following)
         sensor_mid_left = self.signal_mid_left.value()
         sensor_mid_right = self.signal_mid_right.value()
-        print("mid left:", sensor_mid_left, " mid right:", sensor_mid_right)
+        # print("mid left:", sensor_mid_left, " mid right:", sensor_mid_right)
 
         if sensor_mid_right == 1 and sensor_mid_left == 0:
             # Right sensor on line - car drifting right
@@ -887,8 +887,8 @@ class LineFollowerRobot:
         self.motor_go_straight(self.MIN_SPEED, self.MIN_SPEED)
         while (not self.found_box):
             if self.signal_far_left.value() == 1 or self.signal_far_right.value() == 1:
-                self.is_box(current_bay)
-                temp_line_counter += 1
+                if not self.is_box(current_bay):  # Only increment if no box found
+                    temp_line_counter += 1
             if temp_line_counter > 6:
                 current_bay = self._go_to_next_bay(current_bay)
                 temp_line_counter = 1
@@ -954,12 +954,16 @@ class LineFollowerRobot:
             while (self.signal_far_left.value() == 1):
                 if (self._calculate_distance_tof() < 300):
                     self.found_box = True
+                    return True
                 sleep(0.05)
             return False
         elif position == "B1" or position == "A0":
             while (self.signal_far_right.value() == 1):
-                if (self._calculate_distance_URM09() < 300):
+                print(self._calculate_distance_URM09())
+                if (self._calculate_distance_URM09() < 21):
+                    print("Box detected by URM09")
                     self.found_box = True
+                    return True
                 sleep(0.05)
             return False
 
@@ -1126,8 +1130,10 @@ class LineFollowerRobot:
         # Start the flashing LED to indicate running
         self.yellow_led.value(0)
         # Start the algorithm to pick boxes
-        self._path_algorithm("G0", "A16")
-        self._before_pick_box("A16")
+        # self._path_algorithm("G0", "A16")
+        # self._before_pick_box("A16")
+        # self._do_pick_box()
+        # self.pick_box(start="G0", destination="A01")
         self._do_pick_box()
 
         # Last line of the run function
