@@ -14,8 +14,8 @@ class ColourSensor():
         # i2c_bus = SoftI2C(sda=Pin(8), scl=Pin(9)) 
         i2c_bus_tcs = I2C(id=0, sda=Pin(8), scl=Pin(9), freq=100000)  # Reduced frequency for stability
         # print("I2C devices found:", i2c_bus_tcs.scan())
-        control_pin = Pin(10, Pin.OUT)
-        control_pin.value(1)  # Power off the sensor (inverse logic)
+        self.colour_pin = Pin(10, Pin.OUT)
+        self.colour_pin.value(0)  # Power off the sensor (inverse logic)
         # Add delay for sensor initialization
         sleep(0.1)
         
@@ -25,7 +25,7 @@ class ColourSensor():
 
     def get_rgb_value(self) -> (int, int, int):
         # create an output pin at 18 
-        colour_pin.value(0) # ON
+        self.colour_pin.value(0) # ON
 
         '''
         In the actual setup, we set the Pin.OUT to high (1)
@@ -46,19 +46,39 @@ class ColourSensor():
             return None
         
         sleep(1)
-        colour_pin.value(1) # OFF
+        self.colour_pin.value(1) # OFF
         sleep(1)
         return result
 
-    def detect_colour(self):
+    def detect_colour(self, warmup_time=5):
         """
         Detect the color of the surface under the robot using the color sensor.
+        Waits for warmup_time seconds to allow sensor to stabilize before reading.
+
+        Parameters:
+            warmup_time (int): Time in seconds to wait before taking readings (default: 5)
 
         Returns:
             str: The detected color name or None if no match
         """
-        # Read RGB values from the color sensor
-        rgb = self.get_rgb_value()
+        # Turn on sensor
+        self.colour_pin.value(0)  # ON
+        
+        # Wait for sensor to stabilize - first few seconds are inaccurate
+        print(f"Waiting {warmup_time} seconds for colour sensor to stabilize...")
+        sleep(warmup_time)
+        
+        # Now take the reading
+        try:
+            rgb = self.tcs.rgb()
+            print("Light:", self.tcs.light())
+            print("RGB:", rgb)
+        except OSError as e:
+            print(f"I2C Error: {e}")
+            self.colour_pin.value(1)  # OFF
+            return None
+        
+        self.colour_pin.value(1)  # OFF
         
         if rgb is None:
             return None
@@ -81,12 +101,13 @@ class ColourSensor():
                 min_distance = distance
                 closest_color = color_name
 
+        print(f"Closest color: {closest_color} (distance: {min_distance:.2f})")
         return closest_color
 
 if __name__ == "__main__":
     # pin = Pin(16, Pin.OUT)
     # Pin(16, Pin.OUT).value(0)  
-    robot = ColourSensorTest()
+    robot = ColourSensor()
     while True:
         rgb = robot.get_rgb_value()
         if rgb:

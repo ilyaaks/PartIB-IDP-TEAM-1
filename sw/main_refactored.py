@@ -71,6 +71,9 @@ class LineFollowerRobot:
         self.vl53l0.start()
         self.tof.begin()
         self.tof.start_measurement(calib_m=self.tof.eMODE_NO_CALIB, mode=self.tof.ePROXIMITY)
+        
+        # Track sensor states to avoid current draw conflicts
+        self.vl53l0_running = True
 
     def _init_sensors(self):
         """Initialize all sensors and I2C peripherals.
@@ -116,8 +119,8 @@ class LineFollowerRobot:
         # Setup digital button
         self.button = Pin(self.BUTTON_PIN, Pin.IN, Pin.PULL_DOWN)
 
-        # Setup colour sensor:
-        self.colour_sensor = ColourSensor()
+        # Setup colour sensor (initialized on demand to avoid current conflicts with VL53L0X):
+        self.colour_sensor = None  # Lazy initialization
 
         # Setup the URM09 Ultrasonic sensor:
         self.Max_range = 500
@@ -450,7 +453,9 @@ class LineFollowerRobot:
             None
         """
         try:
-            self.vl53l0.stop()
+            if self.vl53l0_running:
+                self.vl53l0.stop()
+                self.vl53l0_running = False
         except Exception as e:
             print(f"Error stopping VL53L0X: {e}")
         finally:
@@ -497,8 +502,8 @@ class LineFollowerRobot:
         self.signal_mid_left.irq(handler=None)
         # self.signal_far_left.irq(handler=None)
         # self.signal_far_right.irq(handler=None)
-        self.prev_sensor_left = 0
-        self.prev_sensor_right = 0
+        self.sensor_left_prev = 0
+        self.sensor_right_prev = 0
 
     def _path_algorithm(self, current_position, desired_position):
         """Navigate robot from current position to desired position using predefined paths.
@@ -621,8 +626,6 @@ class LineFollowerRobot:
         """
         current_time = ticks_ms()
 
-        print("================= Button pressed ==================")
-
         # Debounce: ignore if button pressed too soon after last press
         if ticks_diff(current_time, self.last_button_time) < self.DEBOUNCE_MS:
             return
@@ -632,12 +635,12 @@ class LineFollowerRobot:
         # Toggle running state
         if self.is_running:
             # Stop the robot
-            print("Button pressed - Stopping robot")
+            print("=== Button pressed - Stopping robot ===")
             self.is_running = False
             self.destroy()
         else:
             # Start the robot
-            print("Button pressed - Starting robot")
+            print("=== Button pressed - Starting robot ===")
             self.is_running = True
             # Reset state for fresh start
             self.count_lines = 0
@@ -698,14 +701,14 @@ class LineFollowerRobot:
         # print("mid left:", sensor_mid_left, " mid right:", sensor_mid_right)
 
         if sensor_mid_right == 1 and sensor_mid_left == 0:
-            # Right sensor on line - car drifting right
-            self.left_wheel_speed = max(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MIN_SPEED)
-            self.right_wheel_speed = min(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MAX_SPEED)
+            # Right sensor on line - car drifting left
+            self.left_wheel_speed = min(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MAX_SPEED)
+            self.right_wheel_speed = max(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MIN_SPEED)
 
         elif sensor_mid_left == 1 and sensor_mid_right == 0:
-            # Left sensor on line - car drifting left
-            self.left_wheel_speed = min(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MAX_SPEED)
-            self.right_wheel_speed = max(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MIN_SPEED)
+            # Left sensor on line - car drifting right
+            self.left_wheel_speed = max(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MIN_SPEED)
+            self.right_wheel_speed = min(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MAX_SPEED)
 
         elif sensor_mid_left == 1 and sensor_mid_right == 1:
             # Both on line - go straight
@@ -766,7 +769,6 @@ class LineFollowerRobot:
             int: Distance in millimeters, or 9999 if sensor fails
         """
         distance = self.vl53l0.read()
-        print(">>> Dist: ", distance)
         sleep(0.1)  # Wait for sensor reading
         return distance if distance is not None else 9999  # Return large value on failure to avoid false triggers
 
@@ -777,12 +779,14 @@ class LineFollowerRobot:
             None
         
         Returns:
-            int: Distance in millimeters if data is ready, otherwise None
+            int: Distance in millimeters, or 9999 if data not ready or sensor fails
         """
-        if (self.tof.is_data_ready() == True):
-            return self.tof.get_distance_mm()
+        if self.tof.is_data_ready():
+            distance = self.tof.get_distance_mm()
+            return distance if distance is not None else 9999
+        return 9999  # Return large value when data not ready to avoid false triggers
 
-    def _calcultaed_distance_URM09(self) -> int:
+    def _calculate_distance_URM09(self) -> int:
         """Read distance from URM09 ultrasonic sensor via analog input.
         
         Converts ADC reading to distance using sensor's voltage-distance relationship.
@@ -850,7 +854,7 @@ class LineFollowerRobot:
             return "B1"
         elif (current_bay == "B1"):
             self._path_algorithm("B11", "B0")
-            return "G0"
+            return "B0"
         elif (current_bay == "A1"):
             self._path_algorithm("A16", "G0")
             return "G0"
@@ -858,7 +862,7 @@ class LineFollowerRobot:
             self._path_algorithm("A06", "A16")
             return "A1"
 
-    def pick_box(self, start="G0", destination="A01") -> (str, str):
+    def pick_box(self, start="G0", destination="A01"):
         """Navigate to a bay, search for a box, identify its color, and pick it up.
         
         Process:
@@ -882,21 +886,28 @@ class LineFollowerRobot:
         temp_line_counter = int(destination[2])
         self.found_box = False
 
-        current_bay = destination[0:1]  # It doesn`t matter the specific bay number, just the side
+        current_bay = destination[0:2]  # It doesn`t matter the specific bay number, just the side
         self.direction_flag = "forward"
         self.motor_go_straight(self.MIN_SPEED, self.MIN_SPEED)
+        
         while (not self.found_box):
-            if self.signal_far_left.value() == 1 or self.signal_far_right.value() == 1:
-                if not self.is_box(current_bay):  # Only increment if no box found
-                    temp_line_counter += 1
-            if temp_line_counter > 6:
-                current_bay = self._go_to_next_bay(current_bay)
-                temp_line_counter = 1
-                if current_bay == "G0":
-                    print("No boxes found in any bay.")
-                    return "G0", "G0"
+            # Wait until we reach a perpendicular line
+            self.moving_between_lines(current_bay)
+            
+            # Now we're on a line - check for box
+            if self.is_box(current_bay):
+                # Box found - is_box() sets self.found_box = True
+                break
             else:
-                self.moving_between_lines(current_bay)
+                # No box found on this line, increment counter
+                temp_line_counter += 1
+                
+                if temp_line_counter > 6:
+                    current_bay = self._go_to_next_bay(current_bay)
+                    temp_line_counter = 1
+                    if current_bay == "G0":
+                        print("No boxes found in any bay.")
+                        return "G0", "G0"
 
         current_position = current_bay + str(temp_line_counter)
         self._before_pick_box(current_bay)
@@ -938,7 +949,7 @@ class LineFollowerRobot:
             while (self.signal_far_right.value() == 0):
                 pass
 
-    def is_box(self, position) -> bool:
+    def is_box(self, position, timeout_ms=5000) -> bool:
         """Check for box presence while crossing a line using distance sensors.
         
         Uses appropriate distance sensor (ToF for B0/A1, URM09 for B1/A0)
@@ -946,19 +957,29 @@ class LineFollowerRobot:
         
         Parameters:
             position (str): Current bay position ("B0", "B1", "A0", or "A1")
+            timeout_ms (int): Maximum time to wait for sensor to go low (default: 5000ms)
         
         Returns:
-            bool: False (always - sets self.found_box flag as side effect)
+            bool: True if box detected, False otherwise. Also sets self.found_box flag.
         """
+        start_time = ticks_ms()
+        
         if position == "B0" or position == "A1":
             while (self.signal_far_left.value() == 1):
-                if (self._calculate_distance_tof() < 300):
+                if ticks_diff(ticks_ms(), start_time) > timeout_ms:
+                    print("Timeout waiting for far_left sensor in is_box()")
+                    return False
+                distance = self._calculate_distance_tof()
+                if distance is not None and distance < 300:
                     self.found_box = True
                     return True
                 sleep(0.05)
             return False
         elif position == "B1" or position == "A0":
             while (self.signal_far_right.value() == 1):
+                if ticks_diff(ticks_ms(), start_time) > timeout_ms:
+                    print("Timeout waiting for far_right sensor in is_box()")
+                    return False
                 print(self._calculate_distance_URM09())
                 if (self._calculate_distance_URM09() < 21):
                     print("Box detected by URM09")
@@ -979,11 +1000,11 @@ class LineFollowerRobot:
         Returns:
             None
         """
-        if current_position == "B0" or current_position == "A1":
+        if current_position[0:2] == "B0" or current_position[0:2] == "A1":
             self._execute_turn(self.motor_turn_left_bay, f"before_pick_box_{current_position}")
             self.motors_off()
 
-        elif current_position == "A0" or current_position == "B1":
+        elif current_position[0:2] == "A0" or current_position[0:2] == "B1":
             self._execute_turn(self.motor_turn_right_bay, f"before_pick_box_{current_position}")
             self.motors_off()
             # Wait until centered on line or timeout
@@ -1002,7 +1023,7 @@ class LineFollowerRobot:
         Returns:
             None
         """
-        if current_position[0:1] == "B0" or current_position[0:1] == "A1":
+        if current_position[0:2] == "B0" or current_position[0:2] == "A1":
             self.direction_flag = "reverse"
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay=0.5)
             self._execute_turn(self.motor_turn_right_back, "after_pick_box")
@@ -1010,7 +1031,7 @@ class LineFollowerRobot:
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
             while (self.signal_far_right.value() == 1):
                 pass
-        elif current_position[0:1] == "B1" or current_position[0:1] == "A0":
+        elif current_position[0:2] == "B1" or current_position[0:2] == "A0":
             self.direction_flag = "reverse"
             self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay=0.5)
             self._execute_turn(self.motor_turn_left_back, "after_pick_box")
@@ -1021,13 +1042,93 @@ class LineFollowerRobot:
                 pass
         # self.motors_off()
 
+    def _reinit_vl53l0(self):
+        """Re-initialize VL53L0X sensor after power conflict.
+        
+        Fully re-creates the sensor object to recover from I2C errors
+        caused by current draw conflicts with colour sensor.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
+        print("Re-initializing VL53L0X sensor...")
+        sleep(0.5)  # Allow current to settle before re-init
+        i2c_bus_vl5310 = I2C(0, sda=Pin(self.SDA_PIN), scl=Pin(self.SCL_PIN))
+        self.vl53l0 = VL53L0X(i2c_bus_vl5310)
+        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[0], 18)
+        self.vl53l0.set_Vcsel_pulse_period(self.vl53l0.vcsel_period_type[1], 14)
+        self.vl53l0.start()
+        self.vl53l0_running = True
+        sleep(0.1)  # Allow sensor to stabilize
+
+    def _start_vl53l0(self):
+        """Start VL53L0X distance sensor if not already running.
+        
+        Used for power management to avoid current draw conflicts with colour sensor.
+        If starting fails due to I2C error, attempts full re-initialization.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
+        if not self.vl53l0_running:
+            print("Starting VL53L0X sensor...")
+            try:
+                self.vl53l0.start()
+                self.vl53l0_running = True
+                sleep(0.1)  # Allow sensor to stabilize
+            except OSError as e:
+                print(f"VL53L0X start failed ({e}), re-initializing...")
+                self._reinit_vl53l0()
+
+    def _stop_vl53l0(self):
+        """Stop VL53L0X distance sensor to reduce current draw.
+        
+        Used for power management to allow colour sensor to operate.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
+        if self.vl53l0_running:
+            print("Stopping VL53L0X sensor...")
+            self.vl53l0.stop()
+            self.vl53l0_running = False
+            sleep(0.1)  # Allow current to settle
+
+    def _init_colour_sensor(self):
+        """Initialize colour sensor on demand.
+        
+        Lazy initialization to avoid current draw issues at startup.
+        Must stop VL53L0X before using colour sensor.
+        
+        Parameters:
+            None
+        
+        Returns:
+            None
+        """
+        if self.colour_sensor is None:
+            print("Initializing colour sensor...")
+            self.colour_sensor = ColourSensor()
+            sleep(0.2)  # Allow sensor to stabilize
+
     def _do_pick_box(self):
         """Approach box, identify color, and activate pickup mechanism.
         
         Attempts up to 3 times to:
-        1. Approach box to optimal distance
-        2. Detect box color using color sensor
-        3. Activate linear actuator to secure box
+        1. Approach box to optimal distance (using VL53L0X)
+        2. Stop VL53L0X to allow colour sensor to work
+        3. Detect box color using color sensor
+        4. Restart VL53L0X after colour detection
+        5. Activate linear actuator to secure box
         
         If color detection fails, reverses and retries.
         
@@ -1043,17 +1144,30 @@ class LineFollowerRobot:
 
         # Identify the colour of the box before picking it up
         while not colour_detected and number_of_attempts < 3:
+            # Ensure VL53L0X is running for approach
+            self._start_vl53l0()
             self._approach_box()
+            
+            # Stop VL53L0X before using colour sensor to avoid current conflicts
+            self._stop_vl53l0()
+            
+            # Initialize colour sensor if needed (lazy init)
+            self._init_colour_sensor()
+            
             identified_colour = self.colour_sensor.detect_colour()
             print("Identified colour:", identified_colour)
 
             if identified_colour is not None:
                 colour_detected = True
+                # Don't restart VL53L0X here - actuator operation doesn't need it
+                # It will be re-initialized later when navigation resumes
                 self.linear_actuator.set("retract", 90)
                 sleep(3)
                 self.linear_actuator.off()
             else:
                 print("Couldn't identify colour, redoing the pick up.")
+                # Re-initialize VL53L0X for reversing and retry (full re-init after colour sensor use)
+                self._reinit_vl53l0()
                 self.direction_flag = "reverse"
                 self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED, delay=1)
                 self.motors_off()
@@ -1061,6 +1175,8 @@ class LineFollowerRobot:
 
         if not colour_detected:
             print("Failed to identify colour after 3 attempts, aborting pick up.")
+            # Re-initialize VL53L0X for further operations
+            self._reinit_vl53l0()
             self.motors_off()
             return None
 
@@ -1081,7 +1197,6 @@ class LineFollowerRobot:
         self.direction_flag = "forward"
         self.motor_go_straight(self.MIN_SPEED, self.MIN_SPEED)
         while (self._calculate_distance() > 60):
-            print("Waiting to reach box...")
             pass
         self.motors_off()
 
