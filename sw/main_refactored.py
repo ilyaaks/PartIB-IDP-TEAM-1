@@ -121,7 +121,8 @@ class LineFollowerRobot:
 
         # Setup colour sensor (initialized on demand to avoid current conflicts with VL53L0X):
         self.colour_sensor = None  # Lazy initialization
-
+        self.red_led = Pin(10, Pin.OUT)  # Control pin for colour sensor's red LED
+        self.red_led.value(1)  # Turn off red LED initially
         # Setup the URM09 Ultrasonic sensor:
         self.Max_range = 500
         self.adc_pin = ADC(Pin(27))
@@ -166,6 +167,7 @@ class LineFollowerRobot:
         # Motor speeds
         self.left_wheel_speed = self.BASE_SPEED
         self.right_wheel_speed = self.BASE_SPEED
+        self.current_speed = self.BASE_SPEED  # Track current target speed for line following
 
         # Direction control
         self.direction_flag = "forward"  # Global flag: "forward" or "reverse"
@@ -269,23 +271,28 @@ class LineFollowerRobot:
         Returns:
             None
         """
-        # while (self.signal_mid_right.value()== 0 or self.signal_mid_left.value()==0):
-        #     pass
-        # Turn right
+        ##first version
         self.left_wheel_speed = self.MAX_SPEED
         self.right_wheel_speed = 10
         self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(1.5)
-        while (self.signal_mid_left.value() == 0):
+        sleep(1.65)
+        while (self.signal_mid_left.value() == 0 and self.signal_mid_right.value() == 0):
             pass
         # Adjust to line
-        self.right_wheel_speed = -self.BASE_SPEED
-        self.left_wheel_speed = self.BASE_SPEED
-        self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(0.4)
-        while (self.signal_mid_left.value() == 0):
-            pass
-
+        # self.right_wheel_speed = -self.BASE_SPEED
+        # self.left_wheel_speed = self.BASE_SPEED
+        # self.motor_turn(self.left_wheel_speed, self.right_wheel_speed)
+        # sleep(0.4)
+        # while (self.signal_mid_left.value() == 0):
+        #     pass
+        # left_wheel_speed = self.BASE_SPEED
+        # right_wheel_speed = - self.BASE_SPEED
+        # self.motor_turn(left_wheel_speed, right_wheel_speed)
+        # sleep(0.75)
+        # #Wait until both sensors are detecting the line
+        # while (self.signal_mid_right.value() == 0 and self.signal_mid_left.value() == 0):
+        #     pass
+        
     def motor_turn_left_bay(self):
         """Execute a left turn specifically for entering/exiting bays.
         
@@ -348,19 +355,25 @@ class LineFollowerRobot:
         Returns:
             None
         """
-        self.left_wheel_speed = 0
-        self.right_wheel_speed = self.MAX_SPEED
-        self.direction_flag = "reverse"
-        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        sleep(1.5)  # Usually about this delay is used for a turn
-        while (self.signal_mid_right.value() == 0):  # Wait until the mid right sensor detects the line
-            pass
-        self.right_wheel_speed = 0
-        self.left_wheel_speed = self.MAX_SPEED
-        self.direction_flag = "forward"
-        self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
-        # Wait until the mid left sensor detects the line
-        while (self.signal_mid_left.value() == 0):
+        # self.left_wheel_speed = 0
+        # self.right_wheel_speed = self.MAX_SPEED
+        # self.direction_flag = "reverse"
+        # self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        # sleep(1.5)  # Usually about this delay is used for a turn
+        # while (self.signal_mid_right.value() == 0):  # Wait until the mid right sensor detects the line
+        #     pass
+        # self.right_wheel_speed = 0
+        # self.left_wheel_speed = self.MAX_SPEED
+        # self.direction_flag = "forward"
+        # self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+        # # Wait until the mid left sensor detects the line
+        # while (self.signal_mid_left.value() == 0):
+        #     pass
+        right_wheel_speed = -self.BASE_SPEED
+        left_wheel_speed = self.BASE_SPEED
+        self.motor_turn(left_wheel_speed, right_wheel_speed)
+        sleep(0.75)
+        while (self.signal_mid_right.value() == 0 and self.signal_mid_left.value() == 0):
             pass
 
     def _reverse_on_the_spot(self):
@@ -379,9 +392,7 @@ class LineFollowerRobot:
         left_wheel = -self.MAX_SPEED
         right_wheel = self.MAX_SPEED
         self.motor_turn(left_wheel, right_wheel)
-        # Wait until both mid sensors detect the line
-        # TODO: Develop what time it takes to reverse like that
-        sleep(2)
+        sleep(1.5)
         self.motors_off()
 
     def motor_go_straight(self, speed_left, speed_right, delay=0):
@@ -395,6 +406,10 @@ class LineFollowerRobot:
         Returns:
             None
         """
+        # Update current_speed if both wheels are moving at the same speed
+        if speed_left == speed_right:
+            self.current_speed = speed_left
+        
         if self.direction_flag == "forward":
             self.motor_left.Forward(speed_left)
             self.motor_right.Forward(speed_right)
@@ -425,11 +440,13 @@ class LineFollowerRobot:
             speed_right = abs(speed_right)
             self.motor_left.Forward(speed_left)
             self.motor_right.Reverse(speed_right)
+            # Don't update current_speed during turns (asymmetric wheel speeds)
         elif speed_left <= 0 and speed_right >= 0:
             # Turn left: left motor reverse, right motor forward
             speed_left = abs(speed_left)
             self.motor_left.Reverse(speed_left)
             self.motor_right.Forward(speed_right)
+            # Don't update current_speed during turns (asymmetric wheel speeds)
 
     def motors_off(self):
         """Turn off both motors.
@@ -702,18 +719,18 @@ class LineFollowerRobot:
 
         if sensor_mid_right == 1 and sensor_mid_left == 0:
             # Right sensor on line - car drifting left
-            self.left_wheel_speed = min(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MAX_SPEED)
-            self.right_wheel_speed = max(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MIN_SPEED)
+            self.left_wheel_speed = min(self.current_speed + self.SPEED_ADJUSTMENT, self.MAX_SPEED)
+            self.right_wheel_speed = max(self.current_speed - self.SPEED_ADJUSTMENT, self.MIN_SPEED)
 
         elif sensor_mid_left == 1 and sensor_mid_right == 0:
             # Left sensor on line - car drifting right
-            self.left_wheel_speed = max(self.BASE_SPEED - self.SPEED_ADJUSTMENT, self.MIN_SPEED)
-            self.right_wheel_speed = min(self.BASE_SPEED + self.SPEED_ADJUSTMENT, self.MAX_SPEED)
+            self.left_wheel_speed = max(self.current_speed - self.SPEED_ADJUSTMENT, self.MIN_SPEED)
+            self.right_wheel_speed = min(self.current_speed + self.SPEED_ADJUSTMENT, self.MAX_SPEED)
 
         elif sensor_mid_left == 1 and sensor_mid_right == 1:
             # Both on line - go straight
-            self.left_wheel_speed = self.BASE_SPEED
-            self.right_wheel_speed = self.BASE_SPEED
+            self.left_wheel_speed = self.current_speed
+            self.right_wheel_speed = self.current_speed
 
         else:
             # Both sensors off line - use previous state for aggressive correction
@@ -726,9 +743,9 @@ class LineFollowerRobot:
                 self.left_wheel_speed = self.MAX_SPEED
                 self.right_wheel_speed = self.MIN_SPEED
             else:
-                # On track - maintain base speed
-                self.left_wheel_speed = self.BASE_SPEED
-                self.right_wheel_speed = self.BASE_SPEED
+                # On track - maintain current speed
+                self.left_wheel_speed = self.current_speed
+                self.right_wheel_speed = self.current_speed
 
         # Apply proportional control if error detected
 
@@ -754,7 +771,7 @@ class LineFollowerRobot:
         self.disable_interrupts()
         turn_function()
         self.count_lines = 0
-        # Restrat the interrupts after the turn and reset the speed
+        # Restart the interrupts after the turn and maintain current speed
         self.direction_flag = "forward"
         self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
         self.setup_interrupts()
@@ -892,10 +909,12 @@ class LineFollowerRobot:
         
         while (not self.found_box):
             # Wait until we reach a perpendicular line
+            # if (self.signal_far_left == 0 and self.signal_far_right == 0):
             self.moving_between_lines(current_bay)
             
             # Now we're on a line - check for box
             if self.is_box(current_bay):
+                print("Found a box!")
                 # Box found - is_box() sets self.found_box = True
                 break
             else:
@@ -942,6 +961,7 @@ class LineFollowerRobot:
         Returns:
             None
         """
+
         if position == "B0" or position == "A1":
             while (self.signal_far_left.value() == 0):
                 pass
@@ -949,7 +969,7 @@ class LineFollowerRobot:
             while (self.signal_far_right.value() == 0):
                 pass
 
-    def is_box(self, position, timeout_ms=5000) -> bool:
+    def is_box(self, position, timeout_ms=500) -> bool:
         """Check for box presence while crossing a line using distance sensors.
         
         Uses appropriate distance sensor (ToF for B0/A1, URM09 for B1/A0)
@@ -963,29 +983,33 @@ class LineFollowerRobot:
             bool: True if box detected, False otherwise. Also sets self.found_box flag.
         """
         start_time = ticks_ms()
-        
+        self.motor_go_straight(self.MIN_SPEED, self.MIN_SPEED)
         if position == "B0" or position == "A1":
             while (self.signal_far_left.value() == 1):
                 if ticks_diff(ticks_ms(), start_time) > timeout_ms:
                     print("Timeout waiting for far_left sensor in is_box()")
+                    self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
                     return False
                 distance = self._calculate_distance_tof()
                 if distance is not None and distance < 300:
                     self.found_box = True
                     return True
                 sleep(0.05)
+            self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
             return False
         elif position == "B1" or position == "A0":
             while (self.signal_far_right.value() == 1):
                 if ticks_diff(ticks_ms(), start_time) > timeout_ms:
                     print("Timeout waiting for far_right sensor in is_box()")
+                    self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
                     return False
                 print(self._calculate_distance_URM09())
-                if (self._calculate_distance_URM09() < 21):
+                if (self._calculate_distance_URM09() < 21.5):
                     print("Box detected by URM09")
                     self.found_box = True
                     return True
                 sleep(0.05)
+            # self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
             return False
 
     def _before_pick_box(self, current_position: str):
@@ -1025,22 +1049,27 @@ class LineFollowerRobot:
         """
         if current_position[0:2] == "B0" or current_position[0:2] == "A1":
             self.direction_flag = "reverse"
-            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay=0.5)
+            self.motor_go_straight(self.MIN_SPEED, self.MIN_SPEED, delay=0.5)
             self._execute_turn(self.motor_turn_right_back, "after_pick_box")
             self.direction_flag = "forward"
-            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed)
+            self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
             while (self.signal_far_right.value() == 1):
                 pass
         elif current_position[0:2] == "B1" or current_position[0:2] == "A0":
             self.direction_flag = "reverse"
-            self.motor_go_straight(self.left_wheel_speed, self.right_wheel_speed, delay=0.5)
+            self.motor_go_straight(self.MIN_SPEED, self.MIN_SPEED)
+            while (self.signal_far_right.value() == 0 and self.signal_far_left.value() == 0):
+                pass
             self._execute_turn(self.motor_turn_left_back, "after_pick_box")
             self.direction_flag = "forward"
             self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
             # Wait until the far left sensor is off the line 
-            while self.signal_far_left.value() == 1:
+            while self.signal_far_left.value() == 0:
                 pass
+            self.motor_go_straight(self.BASE_SPEED, self.BASE_SPEED)
+            sleep(2)
         # self.motors_off()
+        # 
 
     def _reinit_vl53l0(self):
         """Re-initialize VL53L0X sensor after power conflict.
@@ -1245,11 +1274,11 @@ class LineFollowerRobot:
         # Start the flashing LED to indicate running
         self.yellow_led.value(0)
         # Start the algorithm to pick boxes
-        # self._path_algorithm("G0", "A16")
-        # self._before_pick_box("A16")
+        self.pick_box(start="G0", destination="A01")
+        # self._before_pick_go("A01")
+        
         # self._do_pick_box()
-        # self.pick_box(start="G0", destination="A01")
-        self._do_pick_box()
+        # self._after_pick_box("A01")
 
         # Last line of the run function
         print("Run function has ended.")
