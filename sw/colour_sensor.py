@@ -4,15 +4,15 @@ from utime import sleep
 import math
 
 class COLOUR:
-    RED = (140, 60, 60)
-    BLUE = (20, 90, 160)
-    GREEN = (40, 100, 120)
-    YELLOW = (120, 120, 40)
+    RED = (90, 58, 95)
+    BLUE = (18, 70, 165)
+    GREEN = (35, 86, 120)
+    YELLOW = (68, 98, 66)
 
 class ColourSensor():
     def __init__(self):
         # i2c_bus = SoftI2C(sda=Pin(8), scl=Pin(9)) 
-        i2c_bus_tcs = I2C(id=0, sda=Pin(8), scl=Pin(9), freq=100000)  # Reduced frequency for stability
+        i2c_bus_tcs = I2C(id=1, sda=Pin(18), scl=Pin(19), freq=100000)  # Reduced frequency for stability
         # print("I2C devices found:", i2c_bus_tcs.scan())
         self.colour_pin = Pin(10, Pin.OUT)
         self.colour_pin.value(0)  # Power off the sensor (inverse logic)
@@ -50,7 +50,7 @@ class ColourSensor():
         sleep(1)
         return result
 
-    def detect_colour(self, warmup_time=5):
+    def detect_colour(self, warmup_time=4):
         """
         Detect the color of the surface under the robot using the color sensor.
         Waits for warmup_time seconds to allow sensor to stabilize before reading.
