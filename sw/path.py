@@ -111,26 +111,26 @@ class Path:
     @staticmethod
     def _path_B0_to_Green_bay(current_position, desired_position):
         # From Bay B ground floor to Green bay
-        return ["right_forward", "left_forward", "stop"], [int(current_position[2]), 3, 1]
+        return ["straight", "right_forward", "left_forward", "stop"], [0, int(current_position[2]), 3, 1]
 
     @staticmethod
     def _path_B1_to_Green_bay(current_position, desired_position):
         # From Bay B first floor to Green bay
-        return (["right_forward", "right_forward", "right_forward", "right_forward", "right_forward",
+        return (["straight", "right_forward", "right_forward", "right_forward", "right_forward", "right_forward",
                  "left_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 8, 3, 1])
+                [0, int(current_position[2]), 1, 1, 1, 8, 3, 1])
 
     @staticmethod
     def _path_A0_to_Green_bay(current_position, desired_position):
         # From Bay A ground floor to Green bay
-        return ["left_forward", "right_forward", "stop"], [int(current_position[2]), 1, 1]
+        return ["straight", "left_forward", "right_forward", "stop"], [0, int(current_position[2]), 1, 1]
 
     @staticmethod
     def _path_A1_to_Green_bay(current_position, desired_position):
         # From Bay A first floor to Green bay
-        return (["left_forward", "left_forward", "left_forward", "left_forward", "left_forward",
+        return (["straight", "left_forward", "left_forward", "left_forward", "left_forward", "left_forward",
                  "right_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 8, 2, 1])
+                [0, int(current_position[2]), 1, 1, 1, 8, 2, 1])
 
     # ========================================================================
     # BLUE BAY PATHS
@@ -162,25 +162,25 @@ class Path:
     @staticmethod
     def _path_B0_to_Blue_bay(current_position, desired_position):
         # From Bay B ground floor to Blue bay
-        return ["right_forward", "left_forward", "stop"], [int(current_position[2]), 4, 0]
+        return ["straight", "right_forward", "left_forward", "stop"], [0, int(current_position[2]), 4, 0]
 
     @staticmethod
     def _path_B1_to_Blue_bay(current_position, desired_position):
         # From Bay B first floor to Blue bay
-        return (["right_forward", "right_forward", "right_forward", "right_forward", "right_forward",
+        return (["straight", "right_forward", "right_forward", "right_forward", "right_forward", "right_forward",
                  "left_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 8, 4, 1])
+                [0, int(current_position[2]), 1, 1, 1, 8, 4, 1])
 
     @staticmethod
     def _path_A0_to_Blue_bay(current_position, desired_position):
         # From Bay A ground floor to Blue bay
-        return ["stop"], [int(current_position[2]) + 2]
+        return ["straight", "stop"], [0, int(current_position[2]) + 2]
 
     @staticmethod
     def _path_A1_to_Blue_bay(current_position, desired_position):
         # From Bay A first floor to Blue bay
-        return (["left_forward", "left_forward", "left_forward", "left_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 10])
+        return (["straight", "left_forward", "left_forward", "left_forward", "left_forward", "stop"],
+                [0, int(current_position[2]), 1, 1, 1, 10])
 
     # ========================================================================
     # RED BAY PATHS
@@ -212,27 +212,27 @@ class Path:
     @staticmethod
     def _path_B0_to_Red_bay(current_position, desired_position):
         # From Bay B ground floor to Red bay
-        return ["stop"], [int(current_position[2]) + 2]
+        return ["straight", "stop"], [0, int(current_position[2]) + 2]
 
     @staticmethod
     def _path_B1_to_Red_bay(current_position, desired_position):
         # From Bay B first floor to Red bay
-        return (["right_forward", "right_forward", "right_forward","right_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 10])
+        return (["straight", "right_forward", "right_forward", "right_forward","right_forward", "stop"],
+                [0, int(current_position[2]), 1, 1, 1, 10])
 
     @staticmethod
     def _path_A0_to_Red_bay(current_position, desired_position):
         print(current_position, "type is", type(current_position))
         print(desired_position, "type is", type(desired_position))
         # From Bay A ground floor to Red bay
-        return ["left_forward", "right_forward", "stop"], [int(current_position[2]), 4, 1]
+        return ["straight", "left_forward", "right_forward", "stop"], [0, int(current_position[2]), 4, 1]
 
     @staticmethod
     def _path_A1_to_Red_bay(current_position, desired_position):
         # From Bay A first floor to Red bay
-        return (["left_forward", "left_forward", "left_forward", "left_forward", "left_forward",
+        return (["straight", "left_forward", "left_forward", "left_forward", "left_forward", "left_forward",
                  "right_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 8, 4, 1])
+                [0, int(current_position[2]), 1, 1, 1, 8, 4, 1])
 
     # ========================================================================
     # YELLOW BAY PATHS
@@ -264,26 +264,26 @@ class Path:
     @staticmethod
     def _path_B0_to_Yellow_bay(current_position, desired_position):
         # From Bay B ground floor to Yellow bay
-        return ["right_forward", "left_forward", "stop"], [int(current_position[2]), 1, 1]
+        return ["straight", "right_forward", "left_forward", "stop"], [0, int(current_position[2]), 1, 1]
 
     @staticmethod
     def _path_B1_to_Yellow_bay(current_position, desired_position):
         # From Bay B first floor to Yellow bay
-        return (["right_forward", "right_forward", "right_forward", "right_forward", "right_forward",
+        return (["straight", "right_forward", "right_forward", "right_forward", "right_forward", "right_forward",
                  "left_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 8, 1, 1])
+                [0, int(current_position[2]), 1, 1, 1, 8, 1, 1])
 
     @staticmethod
     def _path_A0_to_Yellow_bay(current_position, desired_position):
         # From Bay A ground floor to Yellow bay
-        return ["left_forward", "right_forward", "stop"], [int(current_position[2]), 3, 1]
+        return ["straight", "left_forward", "right_forward", "stop"], [0, int(current_position[2]), 3, 1]
 
     @staticmethod
     def _path_A1_to_Yellow_bay(current_position, desired_position):
         # From Bay A first floor to Yellow bay
-        return (["left_forward", "left_forward", "left_forward", "left_forward", "left_forward",
+        return (["straight", "left_forward", "left_forward", "left_forward", "left_forward", "left_forward",
                  "right_forward", "stop"],
-                [int(current_position[2]), 1, 1, 1, 8, 3, 1])
+                [0, int(current_position[2]), 1, 1, 1, 8, 3, 1])
 
     # ========================================================================
     # BAY-TO-BAY NAVIGATION
